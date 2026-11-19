@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walk Armenia</title>
+<style>
+:root{--ink:#f6efe4;--dim:#c9bfb0;--panel:rgba(18,22,31,.74);--line:rgba(255,255,255,.16);--apricot:#f4b04a;--night:#0c0f15;
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;--body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--night);color:var(--ink);font:14px/1.4 var(--body);overflow:hidden}
+#stage{position:fixed;inset:0;background:#000}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#map.drag{cursor:grabbing}
+body.e96 #map{filter:sepia(.55) saturate(.7) contrast(.96) brightness(.97)}
+#pins{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.pin{position:absolute;left:0;top:0;pointer-events:auto;background:none;border:0;padding:0;color:#fff;font:600 12px/1.15 var(--body);text-align:center;white-space:nowrap;text-shadow:0 0 3px #000,0 1px 2px #000,0 0 9px rgba(0,0,0,.7);cursor:pointer;transform:translate(-9999px,-9999px)}
+.pin::before{content:"";display:block;width:14px;height:14px;border-radius:50%;background:var(--apricot);border:2.5px solid #fff;margin:0 auto 3px;box-shadow:0 1px 5px rgba(0,0,0,.7)}
+.pin small{display:block;font-weight:500;font-size:10.5px;color:#eee}
+body.scene #pins,body.scene #credit,body.scene #whot,body.scene #findgrp{display:none}
+#world{position:absolute;inset:0;overflow:hidden;background:#0c0f15;touch-action:none;cursor:grab;display:none}
+#world.drag{cursor:grabbing}
+body[data-base="world"] #world{display:block}
+body[data-base="world"] #map,body[data-base="world"] #pins,body[data-base="world"] #credit,body[data-base="world"] #findgrp{display:none}
+#wimg{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
+#whot{position:absolute;inset:0;pointer-events:none}
+#about{position:fixed;right:12px;top:60px;z-index:7;width:min(360px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:none;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#about.on{display:block}
+#game{position:fixed;right:14px;bottom:124px;z-index:5;width:min(340px,calc(100vw - 28px));max-height:calc(100vh - 200px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:none;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#game.on{display:block}
+#gHead{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:8px;font-size:12px;color:var(--dim)}
+#gHead b{font:600 18px/1 var(--display);color:var(--apricot);white-space:nowrap}
+#gHead i{font-style:normal;color:var(--ink)}
+#gChoices{display:flex;flex-direction:column;gap:5px}
+.choice{display:flex;align-items:center;gap:8px;text-align:left;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-weight:500;line-height:1.2}
+.choice:hover{background:rgba(255,255,255,.15)}
+.choice.hot{border-color:var(--apricot)}
+.choice kbd{font:600 11px/1 var(--body);background:rgba(0,0,0,.45);border-radius:4px;padding:3px 5px;color:var(--dim)}
+.choice span{flex:1}
+.choice em{font-style:normal;color:var(--apricot);font-size:12px;white-space:nowrap}
+#gList{margin-top:8px;font-size:12px;color:var(--dim)}
+#gList summary{cursor:pointer}
+#gQuests{margin:6px 0;padding-left:18px}
+#gQuests li.ok{color:var(--ink);text-decoration:line-through}
+#gReset{font-size:12px;padding:5px 8px;border:1px solid var(--line)}
+@media (max-width:640px){#game{left:10px;right:10px;width:auto;bottom:118px;max-height:46vh}body.play #info{display:none}body.play #mapui{display:none}}
+#about h3{margin:0 0 8px;font:600 18px/1.2 var(--display)}
+#about ol{margin:0 0 10px;padding-left:18px}
+#about li{margin-bottom:6px}
+#about p{margin:0;color:var(--dim);font-size:12px}
+.lay{position:absolute;inset:0;opacity:0;transition:opacity .9s ease;pointer-events:none}
+.lay.on{opacity:1}
+.lay video,.lay img{width:100%;height:100%;object-fit:cover;display:block}
+.lay.tall video{object-fit:contain;position:relative;z-index:1}
+.lay.tall::before{content:"";position:absolute;inset:-40px;background:var(--bg) center/cover;filter:blur(28px) brightness(.55)}
+.lay img.kb{animation:kb 26s ease-in-out infinite alternate}
+@keyframes kb{from{transform:scale(1.02)}to{transform:scale(1.16) translate(-2%,-1.5%)}}
+@media (prefers-reduced-motion:reduce){.lay img.kb{animation:none}.lay{transition:none}}
+#shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to top,rgba(0,0,0,.8),rgba(0,0,0,0) 40%),linear-gradient(to bottom,rgba(0,0,0,.5),rgba(0,0,0,0) 18%)}
+header{position:fixed;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:12px 14px;flex-wrap:wrap;pointer-events:none}
+header>*{pointer-events:auto}
+h1{margin:0;font:600 21px/1 var(--display);letter-spacing:.01em;text-shadow:0 1px 8px #000}
+h1 small{display:block;font:500 10.5px/1.3 var(--body);letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-top:4px}
+.grp{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+button{font:600 13px/1 var(--body);color:var(--ink);background:none;border:0;border-radius:7px;padding:8px 12px;cursor:pointer}
+.grp button[aria-pressed="true"]{background:var(--apricot);color:#2a1610}
+button:focus-visible{outline:2px solid var(--apricot);outline-offset:2px}
+.sp{flex:1}
+#backgrp{display:none}
+body.scene #backgrp{display:flex}
+#mapui{position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:6px}
+#mapui .grp{flex-direction:column}
+#mapui button{font-size:18px;padding:9px 12px}
+#mapui #findme{font-size:12px}
+#hint{position:fixed;left:50%;top:62px;transform:translateX(-50%);z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px 14px;font-size:12.5px;width:max-content;max-width:calc(100vw - 24px);text-align:center;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#credit{position:fixed;right:8px;bottom:118px;z-index:4;font-size:10.5px;color:#ddd;background:rgba(0,0,0,.5);padding:2px 6px;border-radius:4px}
+#toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--apricot);border-radius:9px;padding:8px 12px;width:max-content;max-width:min(420px,calc(100vw - 24px));display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#toast.on{display:block}
+#toast b{display:block;font:600 15px/1.2 var(--display)}
+#toast em{display:block;font-style:normal;color:var(--dim);font-size:11px;margin-top:3px}
+#info{position:fixed;left:0;right:0;bottom:132px;z-index:4;padding:0 16px;pointer-events:none;display:none}
+body.scene #info{display:block}
+#title{font:600 clamp(24px,4.2vw,44px)/1.08 var(--display);text-shadow:0 2px 14px #000;margin:0}
+#hy{color:var(--apricot);font-size:15px;margin-top:3px;text-shadow:0 1px 6px #000}
+#cap{color:#e6ddcf;font-size:12px;margin-top:6px;max-width:640px;text-shadow:0 1px 5px #000}
+#zoom{position:fixed;left:16px;right:16px;bottom:118px;z-index:5;display:none;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
+#zoom.on{display:flex}
+#zoom input{flex:1;accent-color:var(--apricot)}
+#strip{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:8px;overflow-x:auto;padding:10px 14px 14px;background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,0));scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.3) transparent}
+.card{flex:0 0 auto;width:132px;padding:0;border-radius:9px;overflow:hidden;background:#000;border:2px solid transparent;text-align:left;position:relative}
+.card img{display:block;width:132px;height:74px;object-fit:cover;opacity:.84}
+.card span{display:block;padding:5px 7px 6px;font:600 11.5px/1.2 var(--body);color:var(--ink);background:rgba(18,22,31,.94);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card[aria-pressed="true"]{border-color:var(--apricot)}
+.card[aria-pressed="true"] img{opacity:1}
+.card i{position:absolute;top:5px;left:5px;font:700 9px/1 var(--body);font-style:normal;letter-spacing:.08em;background:var(--apricot);color:#2a1610;border-radius:3px;padding:3px 4px}
+@media (max-width:640px){#info{bottom:122px}.card{width:112px}.card img{width:112px;height:63px}h1{font-size:18px}#hint{top:104px;font-size:11.5px}#mapui{top:auto;bottom:128px;transform:none}#credit{font-size:9px;left:8px;right:auto;bottom:108px}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="map" aria-label="Satellite map of Yerevan. Drag to move, scroll or pinch to zoom."></canvas><div id="pins"></div><div id="world"><img id="wimg" src="world.jpg" alt="Rendered 3D aerial view of central Yerevan with Mount Ararat on the horizon" draggable="false"><div id="whot"></div></div><div class="lay" id="A"></div><div class="lay" id="B"></div><div id="shade"></div></div>
+<header>
+  <h1>Քայլիր Հայաստանում<small>Walk Armenia</small></h1>
+  <span class="sp"></span>
+  <div class="grp" id="backgrp"><button id="back">← Back</button></div>
+  <div class="grp"><button id="how" aria-expanded="false" aria-controls="about">How it works</button></div>
+  <div class="grp" role="group" aria-label="Era"><button id="e96" aria-pressed="false">1996</button><button id="eNow" aria-pressed="true">Today</button></div>
+  <div class="grp"><button id="snd" aria-pressed="false">Sound</button></div>
+</header>
+<div id="mapui"><div class="grp"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div><div class="grp" id="findgrp"><button id="findme">Find me</button></div></div>
+<div id="hint"></div>
+<div id="credit">Imagery © Esri, Maxar, Earthstar Geographics · Streets © OpenStreetMap</div>
+<div id="about"><h3>Become the main character</h3><ol><li>Upload one clear photo of yourself.</li><li>Your avatar is built from it and placed in every street scene.</li><li>Zoom from the city down to the street and watch yourself walk Armenia.</li></ol><p>This demo has one main character and one day: walk between places, spend your dram, tick off the list. Sign-up, photo upload and payment are not built yet. Prices are game values.</p></div>
+<aside id="game" aria-label="What to do next"><div id="gHead"><b id="gWallet"></b><span>Bag: <i id="gBag"></i></span></div>
+  <div id="gChoices"></div>
+  <details id="gList"><summary>Today’s list · <span id="gProg"></span></summary><ul id="gQuests"></ul><button id="gReset">Start a new day</button></details></aside>
+<div id="toast" role="status"></div>
+<div id="info" aria-live="polite"><h2 id="title"></h2><div id="hy"></div><div id="cap"></div></div>
+<div id="zoom"><span>Space</span><input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Zoom from space to the street"><span>Street</span></div>
+<nav id="strip" aria-label="Places"></nav>
+<script src="net.js"></script>
+<script>
+const AI='AI-generated scene. An illustration, not real footage.';
+const ME='AI-generated scene of you. An illustration, not real footage.';
+const HAVE={film:0,pov:1};
+const NOW=[
+ {id:'world',en:'3D city',hy:'',m:'world',tag:'3D'},
+ {id:'film',en:'From space to the street',hy:'Արարատից մինչև Հյուսիսային պողոտա',m:'film.mp4',tag:'FILM',cap:'Recorded from the full interactive map: real satellite imagery, real terrain and OpenStreetMap streets. Drag the slider or scroll to zoom yourself.'},
+ {id:'pov',en:'Walk the avenue yourself',hy:'Քո աչքերով',m:'pov.mp4',tall:1,tag:'POV',cap:AI},
+ {id:'north',en:'Northern Avenue',hy:'Հյուսիսային պողոտա',m:'me_north.mp4',cap:ME,ll:[44.51415,40.18195]},
+ {id:'ave',en:'A Yerevan avenue',hy:'Պողոտա',m:'me_ave.mp4',cap:ME},
+ {id:'cascade',en:'Cascade',hy:'Կասկադ',m:'me_cascade.mp4',cap:ME,ll:[44.51555,40.18990]},
+ {id:'vern',en:'Vernissage',hy:'Վերնիսաժ',m:'me_vern.mp4',cap:ME,ll:[44.5181,40.1760]},
+ {id:'saryan',en:'Saryan Park painters',hy:'Սարյանի այգի',m:'me_saryan.mp4',cap:ME,ll:[44.51372,40.18792]},
+ {id:'rsq',en:'Republic Square',hy:'Հանրապետության հրապարակ',m:'me_rsq.mp4',cap:ME,ll:[44.51265,40.17767]},
+ {id:'park',en:'A park in Yerevan',hy:'Այգի',m:'me_park.mp4',cap:ME},
+ {id:'res',en:'A courtyard street',hy:'Բակ',m:'me_res.mp4',cap:ME},
+ {id:'abov',en:'Abovyan Street',hy:'Աբովյան փողոց',m:'me_walk.mp4',cap:'The clip you supplied (AI-generated).',ll:[44.51640,40.18215]},
+ {id:'rural',en:'Ararat valley village',hy:'Արարատյան դաշտ',m:'me_rural.mp4',cap:ME},
+ {id:'gum',en:'GUM Market',hy:'ԳՈՒՄ-ի շուկա',m:'me_gum.jpg',cap:ME,ll:[44.50975,40.17135]},
+ {id:'taraz',en:'Taraz dancers',hy:'Տարազ',m:'taraz_now.mp4',cap:AI},
+ {id:'market',en:'Vernissage stalls',hy:'Վերնիսաժ',m:'vern_now.mp4',cap:AI},
+ {id:'map',en:'Satellite map',hy:'',m:'map',tag:'SAT'}].filter(q=>HAVE[q.id]!==0);
+const OLD=[
+ {id:'map',en:'Satellite map',hy:'',m:'map',tag:'SAT'},
+ {id:'bread',en:'Bread queue, 1996',hy:'Հացի հերթ',m:'bread_96.mp4',cap:AI,ll:[44.51640,40.18215]},
+ {id:'rs96',en:'Republic Square, 1996',hy:'Հանրապետության հրապարակ',m:'rs_96.jpg',cap:AI,ll:[44.51265,40.17767]},
+ {id:'flea',en:'Vernissage, 1996',hy:'Վերնիսաժ',m:'flea_96.jpg',cap:AI,ll:[44.5181,40.1760]},
+ {id:'sar96',en:'Saryan Park, 1996',hy:'Սարյանի այգի',m:'saryan_96.jpg',cap:AI,ll:[44.51372,40.18792]},
+ {id:'yard',en:'A courtyard, 1996',hy:'Բակ',m:'yard_96.jpg',cap:AI,ll:[44.50780,40.18080]},
+ {id:'kiosk',en:'Street kiosk, 1996',hy:'Կրպակ',m:'kiosk_96.jpg',cap:AI},
+ {id:'cas96',en:'Cascade, 1996',hy:'Կասկադ',m:'cascade_96.jpg',cap:AI,ll:[44.51555,40.18990]},
+ {id:'cafe',en:'Café, 1996',hy:'Սրճարան',m:'cafe_96.jpg',cap:AI}];
+const EXTRA_PINS=[{en:'Opera and Freedom Square',hy:'Օպերա',ll:[44.51502,40.18585],now:'park'},{en:'A courtyard',hy:'Բակ',ll:[44.50780,40.18080],now:'res'},{en:'Kond',hy:'Կոնդ',ll:[44.50250,40.18270],now:'res'}];
+const $=id=>document.getElementById(id);
+let era='now',cur=null,lay=$('B'),sound=false,vid=null,scene=false,base='world',mode='world',airOf=null;
+const list=()=>era==='now'?NOW:OLD;
+const byId=id=>list().find(q=>q.id===id);
+function thumb(it){return it.m==='world'?'t_world.jpg':it.m==='map'?'t_map.jpg':'t_'+it.m.replace(/\.(mp4|jpg)$/,'')+'.jpg';}
+
+// ---------------- map: a small pyramid of real satellite captures, north up
+const ZR=17.5,TW=1280,TH=720,CEN=[44.5115,40.1825],HOME=[44.5146,40.1838];
+const LV=[{z:11.5,cols:1,rows:1},{z:13.5,cols:2,rows:2},{z:15.5,cols:3,rows:4},{z:17.5,cols:5,rows:8}];
+const wsz=z=>512*Math.pow(2,z);
+const toPx=(ll,z)=>{const s=Math.sin(ll[1]*Math.PI/180);return[(ll[0]+180)/360*wsz(z),(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*wsz(z)];};
+const toW=ll=>toPx(ll,ZR);
+const MPP=40075016.686*Math.cos(40.18*Math.PI/180)/wsz(ZR),PM=1/MPP;
+LV.forEach((L,n)=>{const c=toPx(CEN,L.z);L.x0=Math.round(c[0]-L.cols*TW/2);L.y0=Math.round(c[1]-L.rows*TH/2);L.f=Math.pow(2,ZR-L.z);L.n=n+1;L.img={};});
+const B0={x0:LV[0].x0*LV[0].f,y0:LV[0].y0*LV[0].f,x1:(LV[0].x0+TW)*LV[0].f,y1:(LV[0].y0+TH)*LV[0].f};
+const ZMIN=11.5,ZMAX=19.3,ZDIVE=19.2;
+const cv=$('map'),ctx=cv.getContext('2d');let cw=0,ch=0,dpr=1;
+const V={x:toW(HOME)[0],y:toW(HOME)[1],z:14.6};let anim=null;
+function size(){dpr=Math.min(2,window.devicePixelRatio||1);cw=window.innerWidth;ch=window.innerHeight;cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);}
+window.addEventListener('resize',size);size();
+const K=()=>Math.pow(2,V.z-ZR);
+function clampV(){const fit=Math.log2(Math.max(cw/TW,ch/TH))+LV[0].z;V.z=Math.max(Math.max(ZMIN,fit),Math.min(ZMAX,V.z));const k=K(),hw=cw/2/k,hh=ch/2/k;
+  V.x=Math.max(B0.x0+hw,Math.min(B0.x1-hw,V.x));V.y=Math.max(B0.y0+hh,Math.min(B0.y1-hh,V.y));if(B0.x1-B0.x0<2*hw)V.x=(B0.x0+B0.x1)/2;if(B0.y1-B0.y0<2*hh)V.y=(B0.y0+B0.y1)/2;}
+function tile(L,i,j){const key=i+'_'+j;let im=L.img[key];if(!im){im=new Image();im.decoding='async';im.src='tiles/L'+L.n+'_'+key+'.jpg';L.img[key]=im;}return im;}
+function drawMap(){const k=K();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#0c0f15';ctx.fillRect(0,0,cw,ch);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  for(const L of LV){const s=k*L.f;if(L.n>1&&s<.5)continue;
+    for(let j=0;j<L.rows;j++)for(let i=0;i<L.cols;i++){const sx=((L.x0+i*TW)*L.f-V.x)*k+cw/2,sy=((L.y0+j*TH)*L.f-V.y)*k+ch/2,w=TW*s,h=TH*s;if(sx>cw||sy>ch||sx+w<0||sy+h<0)continue;const im=tile(L,i,j);if(!(im.complete&&im.naturalWidth))continue;
+      const a0=Math.max(sx,0),b0=Math.max(sy,0),a1=Math.min(sx+w,cw),b1=Math.min(sy+h,ch);if(a1<=a0||b1<=b0)continue;ctx.drawImage(im,(a0-sx)/s,(b0-sy)/s,(a1-a0)/s,(b1-b0)/s,a0,b0,a1-a0,b1-b0);}}}
+const scr=(x,y)=>[(x-V.x)*K()+cw/2,(y-V.y)*K()+ch/2];
+function flyTo(x,y,z,ms,then){const a={x:V.x,y:V.y,z:V.z},t0=performance.now();anim=now=>{let u=Math.max(0,Math.min(1,(now-t0)/ms));u=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;const zz=a.z+(z-a.z)*u,s=Math.abs(a.z-z)<1e-6?u:(Math.pow(2,-zz)-Math.pow(2,-a.z))/(Math.pow(2,-z)-Math.pow(2,-a.z));V.z=zz;V.x=a.x+(x-a.x)*s;V.y=a.y+(y-a.y)*s;if(u>=1){anim=null;if(then)then();}};}
+function zoomAt(px,py,dz){const k0=K(),wx=(px-cw/2)/k0+V.x,wy=(py-ch/2)/k0+V.y;V.z=Math.max(ZMIN,Math.min(ZMAX,V.z+dz));clampV();const k1=K();V.x=wx-(px-cw/2)/k1;V.y=wy-(py-ch/2)/k1;clampV();if(dz>0&&V.z>=ZDIVE)dive();}
+
+// ---------------- people and cars on the real street network
+const MODC=['#f2f2f0','#f2f2f0','#f2f2f0','#f2f2f0','#eceae6','#c9ccd0','#c9ccd0','#c9ccd0','#8e9499','#8e9499','#3b3f45','#17181a','#17181a','#17181a','#17181a','#1f2d44','#8f1d1d','#b9ad98'];
+const SOVC=['#e9e2cf','#e9e2cf','#f0ede4','#f0ede4','#b3261e','#27405c','#5f7f5a','#d6a43a','#c9632a','#7b8a94','#3a3f45','#8a3b2a'];
+const BLK=['#17181a','#17181a','#17181a','#f2f2f0','#3b3f45'];
+const FLEET={now:[
+ [14,'Mercedes-Benz sedan (2000s used import)','sedan',MODC,'German sedans are the status car here; Mercedes has drawn the most car loans in Armenia.'],
+ [12,'Toyota Camry / Corolla','sedan',MODC,'Toyota is among the most popular makes in Armenia.'],
+ [10,'Opel Astra','hatch',MODC,'A cheap German import, bought up quickly and very common as a taxi.'],
+ [9,'Nissan sedan','sedan',MODC,'Nissan is one of the three most-financed makes in Armenia.'],
+ [5,'BMW 5 Series (older import)','sedan',MODC,'Older BMWs arrive in large numbers as used imports.'],
+ [4,'Volkswagen','hatch',MODC,'A regular in Armenia’s top ten makes.'],
+ [5,'Kia / Hyundai sedan','sedan',MODC,'Korean sedans are common with private buyers and taxi drivers.'],
+ [4,'Honda / Mitsubishi crossover','suv',MODC,'Japanese used imports make up much of the fleet.'],
+ [5,'Toyota RAV4 / Land Cruiser Prado','suv',MODC,'Japanese SUVs are everywhere in Yerevan.'],
+ [3,'Lexus LX / Mercedes G-Class','suv',BLK,'The big dark SUV is the top status symbol.'],
+ [5,'Lada 2107','boxy',SOVC,'Soviet-design Ladas are still on the road, usually looking tired.'],
+ [3,'Lada Niva','niva',SOVC,'The small Soviet 4×4 is still common.'],
+ [5,'Tesla (electric)','sedan',MODC,'Electric cars were close to a third of car imports in 2024, and Tesla is among the most imported.'],
+ [3,'Chevrolet Volt (plug-in hybrid)','hatch',MODC,'One of the most imported models of 2024.'],
+ [7,'Chinese electric crossover','suv',MODC,'Chinese electric models are a fast-growing share of imports.'],
+ [2,'GAZelle City minibus','van',['#f2f2f0','#e9e2cf'],'Small-capacity buses on the lighter routes.']],
+ '96':[
+ [34,'Zhiguli VAZ-2101 / 2106','boxy',SOVC,'The Zhiguli was the everyday Soviet family car.'],
+ [10,'Lada VAZ-2107','boxy',SOVC,'The newer, squarer Lada.'],
+ [12,'Moskvich','boxy',SOVC,'One of the three standard Soviet makes, with Lada and Volga.'],
+ [16,'Volga GAZ-24','volga',['#e9e2cf','#f0ede4','#17181a','#17181a','#7b8a94','#d6a43a'],'The big Soviet sedan, used by officials and as a taxi.'],
+ [5,'Niva VAZ-2121','niva',SOVC,'The small Soviet 4×4.'],
+ [7,'RAF minibus (marshrutka)','van',['#f0ede4','#e9e2cf','#d6a43a'],'RAF vans ran Yerevan’s shared-taxi routes until the late 1990s.'],
+ [5,'ErAZ-762 van','van',['#7b8a94','#e9e2cf','#5f7f5a'],'Built in Yerevan from 1966 until 1996.'],
+ [4,'Mercedes-Benz (1980s used import)','sedan',['#e9e2cf','#17181a','#8e9499'],'Second-hand 1980s Mercedes were the prestige import.']]};
+const BUSES={now:[['MAN Lion’s City 12 m city bus','bus12','#e8e9ea','Yerevan bought 87 of these low-floor buses.'],['Zhongtong 8.5 m city bus','bus8','#e8e9ea','The mid-size bus that replaced most marshrutkas.'],['Zhongtong 8.5 m city bus','bus8','#e8e9ea','The mid-size bus that replaced most marshrutkas.'],['Yutong trolleybus','trolley','#dfe7ee','New battery-assisted trolleybuses; the old fleet has been retired.']],
+ '96':[['Škoda 9Tr / ZiU-682 trolleybus','trolley','#c8402f','The Soviet-era trolleybus fleet.']]};
+const BODY={sedan:[4.7,1.82,5],hatch:[4.25,1.78,5],suv:[4.8,1.95,5],boxy:[4.1,1.62,1.5],volga:[4.75,1.8,2],niva:[3.72,1.68,2],van:[5,1.95,3],bus12:[12,2.55,3],bus8:[8.5,2.4,3],trolley:[11.6,2.5,3]};
+const VC={};
+function vcan(body,col){const id=body+col;if(VC[id])return VC[id];const SC=2,B=BODY[body],Ln=Math.round(B[0]*10),W=Math.round(B[1]*10),r=B[2],m=4,tr=body==='trolley',big=tr||body==='bus12'||body==='bus8',c=document.createElement('canvas');c.width=(W+m*2)*SC;c.height=(Ln+m*2+(tr?26:0))*SC;const g=c.getContext('2d');g.scale(SC,SC);
+  const rr=(x,y,w,h,q)=>{g.beginPath();g.moveTo(x+q,y);g.lineTo(x+w-q,y);g.quadraticCurveTo(x+w,y,x+w,y+q);g.lineTo(x+w,y+h-q);g.quadraticCurveTo(x+w,y+h,x+w-q,y+h);g.lineTo(x+q,y+h);g.quadraticCurveTo(x,y+h,x,y+h-q);g.lineTo(x,y+q);g.quadraticCurveTo(x,y,x+q,y);g.closePath();};
+  g.fillStyle='rgba(0,0,0,.38)';rr(m+2,m+3,W,Ln,r);g.fill();g.fillStyle=col;rr(m,m,W,Ln,r);g.fill();
+  const gr=g.createLinearGradient(m,0,m+W,0);gr.addColorStop(0,'rgba(0,0,0,.3)');gr.addColorStop(.2,'rgba(0,0,0,0)');gr.addColorStop(.8,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,.3)');g.fillStyle=gr;rr(m,m,W,Ln,r);g.fill();
+  const glass='rgba(18,26,34,.92)';
+  if(big){g.fillStyle=glass;rr(m+2,m+1.5,W-4,5,2);g.fill();g.fillStyle='rgba(255,255,255,.24)';rr(m+3,m+9,W-6,Ln-13,2);g.fill();g.fillStyle='rgba(70,76,82,.85)';for(let y=m+18;y<m+Ln-16;y+=Ln/3.1){rr(m+6,y,W-12,11,1.5);g.fill();}
+    if(tr){g.strokeStyle='#22262b';g.lineWidth=1.3;g.beginPath();g.moveTo(m+W/2-3,m+Ln*.55);g.lineTo(m+W/2-5,m+Ln+24);g.moveTo(m+W/2+3,m+Ln*.55);g.lineTo(m+W/2+5,m+Ln+24);g.stroke();if(col==='#c8402f'){g.fillStyle='rgba(240,226,190,.9)';g.fillRect(m,m+6,1.8,Ln-12);g.fillRect(m+W-1.8,m+6,1.8,Ln-12);}}}
+  else if(body==='van'){g.fillStyle=glass;rr(m+2,m+3,W-4,7,2);g.fill();g.fillStyle='rgba(255,255,255,.2)';rr(m+2.5,m+12,W-5,Ln-15,2);g.fill();g.fillStyle=glass;g.fillRect(m+3,m+Ln-3.6,W-6,2);g.fillRect(m+1,m+12,1.3,Ln*.5);g.fillRect(m+W-2.3,m+12,1.3,Ln*.5);}
+  else{const boxy=r<3,three=body==='sedan'||body==='boxy'||body==='volga',y1=m+Ln*(boxy?.3:.27),y2=three?m+Ln*(boxy?.7:.74):m+Ln-6,wsh=boxy?5:7,rsh=boxy?4:5.5;
+    g.fillStyle=glass;g.beginPath();g.moveTo(m+2,y1+wsh);g.lineTo(m+3.2,y1);g.lineTo(m+W-3.2,y1);g.lineTo(m+W-2,y1+wsh);g.closePath();g.fill();
+    if(three){g.beginPath();g.moveTo(m+2.2,y2);g.lineTo(m+W-2.2,y2);g.lineTo(m+W-3.2,y2+rsh);g.lineTo(m+3.2,y2+rsh);g.closePath();g.fill();}else{g.fillRect(m+2.6,m+Ln-5.6,W-5.2,2.6);}
+    g.fillRect(m+1.2,y1+wsh+1,1.3,y2-y1-wsh-2);g.fillRect(m+W-2.5,y1+wsh+1,1.3,y2-y1-wsh-2);
+    g.fillStyle='rgba(255,255,255,.2)';rr(m+3,y1+wsh+.5,W-6,y2-y1-wsh-1,2);g.fill();
+    if(!boxy){g.fillStyle=col;g.fillRect(m-1.2,y1+2,1.6,2.2);g.fillRect(m+W-.4,y1+2,1.6,2.2);}else{g.fillStyle='rgba(205,208,212,.92)';g.fillRect(m+1,m,W-2,1.3);g.fillRect(m+1,m+Ln-1.3,W-2,1.3);}}
+  g.fillStyle='rgba(255,244,200,.95)';g.fillRect(m+1.5,m+.6,3,1.5);g.fillRect(m+W-4.5,m+.6,3,1.5);g.fillStyle='rgba(205,30,30,.95)';g.fillRect(m+1.5,m+Ln-2,3,1.5);g.fillRect(m+W-4.5,m+Ln-2,3,1.5);
+  VC[id]={c,w:W+m*2,cy:m+Ln/2};return VC[id];}
+const P_COL={now:['#f1efe9','#f1efe9','#e8e4da','#d7c9b0','#9db7d1','#c0392b','#d9a441','#6f8f6a','#2e4a6b','#1c1c1e','#2b2b30','#3a4656','#8f887c','#7a2b2b','#151515','#e7b7c2'],'96':['#1e1a18','#2a221d','#3b3029','#4a443c','#5d5448','#241d1b','#6a5a4a','#2f2b33','#151312','#3a3f38']};
+const H_COL=['#17120f','#2a1d16','#3a2a1e','#8f8b84','#c9c2b6','#5a2a1a'];
+const MALE=['Armen','Vardan','Tigran','Hayk','Aram','Gevorg','Levon','Karen','Ashot','Samvel','Narek','Davit'],FEMALE=['Anahit','Nune','Lusine','Gayane','Hasmik','Mariam','Ani','Lilit','Siranush','Arpine','Karine','Narine'];
+const SURN=['Petrosyan','Hakobyan','Grigoryan','Sargsyan','Harutyunyan','Khachatryan','Avetisyan','Hovhannisyan','Karapetyan','Vardanyan','Mkrtchyan','Manukyan'];
+const ROLES={now:['software developer walking to the office','painter carrying canvases to Saryan Park','carpet seller heading to a stall at Vernissage','student meeting friends on Northern Avenue','barista on the way to open the café','pensioner going to play nardi in the courtyard','tour guide leading visitors toward the Cascade','folk dancer carrying a taraz costume to rehearsal','grandmother buying lavash and herbs','taxi driver getting a coffee between fares'],
+ '96':['engineer now driving a taxi','teacher selling books at the market','pensioner queuing for bread','student walking to the university','kiosk seller carrying cigarettes and gum','painter taking canvases to the park','grandmother carrying water home','mechanic on his way to fix a Zhiguli']};
+const pick=a=>a[Math.floor(Math.random()*a.length)],rnd=(a,b)=>a+(b-a)*Math.random();
+function wpick(l){let t=0;for(const x of l)t+=x[0];let r=Math.random()*t;for(const x of l){r-=x[0];if(r<=0)return x;}return l[0];}
+let lines=[],ends=[],walkers=[],cars=[];
+(function net(){const N=window.NET||[];for(const l of N){const pts=l.p.map(toW),cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));if(cum[cum.length-1]>1)lines.push({pts,cum,len:cum[cum.length-1],road:!!l.r,half:(l.h||0)*PM,cls:l.c});}
+  lines.forEach((l,i)=>{ends.push([l.pts[0][0],l.pts[0][1],i,0]);const e=l.pts[l.pts.length-1];ends.push([e[0],e[1],i,1]);});})();
+function nearLines(cx,cy,R,roadOnly){const o=[];for(const l of lines){if(roadOnly&&(!l.road||l.cls==='service'))continue;const p=l.pts[0];if(Math.abs(p[0]-cx)<R&&Math.abs(p[1]-cy)<R)o.push(l);}return o;}
+const wOff=l=>(l.road?l.half+rnd(.6,2.6)*PM:rnd(.3,1.6)*PM)*(Math.random()<.5?1:-1);
+function placeMe(){const w=walkers[0];if(!w||!w.me)return;let best=null,bi=0,bd=1e18;for(const l of lines){for(let i=0;i<l.pts.length;i+=2){const dx=l.pts[i][0]-V.x,dy=l.pts[i][1]-V.y,d=dx*dx+dy*dy;if(d<bd){bd=d;best=l;bi=i;}}}
+  if(!best)return;w.l=best;w.s=best.cum[bi];w.d=Math.random()<.5?1:-1;w.off=(best.road?best.half+1.4*PM:.8*PM)*(Math.random()<.5?1:-1);}
+function spawn(){walkers=[];cars=[];if(!lines.length)return;const e=era;let near=nearLines(V.x,V.y,480*PM);if(near.length<8)near=lines;let roads=nearLines(V.x,V.y,800*PM,true);if(roads.length<4)roads=lines.filter(l=>l.road&&l.cls!=='service');
+  const nP=e==='96'?300:850,nC=roads.length?(e==='96'?24:85):0;
+  for(let i=0;i<nP;i++){const l=pick(near),male=Math.random()<.5;walkers.push({l,s:rnd(0,l.len),d:Math.random()<.5?1:-1,v:rnd(.9,1.6)*PM,off:wOff(l),c:pick(P_COL[e]),h:pick(H_COL),name:pick(male?MALE:FEMALE)+' '+pick(SURN),age:Math.floor(rnd(17,78)),role:pick(ROLES[e]),pause:0,x:0,y:0,a:0});}
+  if(e==='now'&&walkers.length>8){const w=walkers[0];w.me=1;w.c='#ffffff';w.h='#17120f';w.v=1.3*PM;placeMe();const fo=[[1.1,.9],[2.2,-.8],[-1.2,1.1],[3.4,.3],[-2.4,-.9],[.2,-1.7]];fo.forEach((f,k)=>{walkers[k+1].fol={ds:f[0]*PM,doff:f[1]*PM};});}
+  const nb=e==='96'?3:8;
+  for(let i=0;i<nC;i++){const l=pick(roads);let m;if(i<nb){const b=pick(BUSES[e]);m={model:b[0],sp:vcan(b[1],b[2]),note:b[3],bus:1};}else{const f=wpick(FLEET[e]);m={model:f[1],sp:vcan(f[2],pick(f[3])),note:f[4],bus:0};}
+    m.l=l;m.s=rnd(0,l.len);m.d=Math.random()<.5?1:-1;m.v=(e==='96'?rnd(5,8):rnd(7,12))*(m.bus?.7:1)*PM;m.x=0;m.y=0;m.a=0;cars.push(m);}}
+function posOn(l,s,off,o){let i=1;while(i<l.cum.length-1&&l.cum[i]<s)i++;const a=l.pts[i-1],b=l.pts[i],seg=l.cum[i]-l.cum[i-1]||1,t=(s-l.cum[i-1])/seg,dx=(b[0]-a[0])/seg,dy=(b[1]-a[1])/seg;o.x=a[0]+(b[0]-a[0])*t-dy*off;o.y=a[1]+(b[1]-a[1])*t+dx*off;o.dx=dx;o.dy=dy;}
+function hop(w,roadOnly){const l=w.l,e=w.d>0?l.pts[l.pts.length-1]:l.pts[0],c=[],R=(roadOnly?9:14)*PM;for(const q of ends){const nl=lines[q[2]];if(nl===l)continue;if(roadOnly&&(!nl.road||nl.cls==='service'))continue;if(Math.abs(q[0]-e[0])+Math.abs(q[1]-e[1])<R)c.push(q);}
+  if(!c.length){w.d=-w.d;w.s=w.d>0?0:l.len;return;}const q=pick(c),nl=lines[q[2]];w.l=nl;w.d=q[3]===0?1:-1;w.s=q[3]===0?0:nl.len;if(!roadOnly){const sg=Math.sign(w.off)||1;w.off=Math.abs(wOff(nl))*sg;}}
+let lastFocus=0,dragging=false;const _o={};
+function refocus(){const near=nearLines(V.x,V.y,480*PM);if(near.length>=4)for(const w of walkers){if(w.me||w.fol)continue;if(Math.abs(w.x-V.x)>620*PM||Math.abs(w.y-V.y)>620*PM){w.l=pick(near);w.s=rnd(0,w.l.len);w.off=wOff(w.l);}}
+  const roads=nearLines(V.x,V.y,800*PM,true);if(roads.length>=3)for(const k of cars){if(Math.abs(k.x-V.x)>1000*PM||Math.abs(k.y-V.y)>1000*PM){k.l=pick(roads);k.s=rnd(0,k.l.len);}}
+  const me=walkers[0];if(me&&me.me&&V.z>=16.2&&!anim&&!dragging){const p=scr(me.x,me.y);if(p[0]<cw*.08||p[0]>cw*.92||p[1]<ch*.14||p[1]>ch*.8)placeMe();}}
+function step(dt,now){if(now-lastFocus>1200){lastFocus=now;refocus();}const me=walkers[0];
+  for(const w of walkers){if(w.fol&&me&&me.me){w.l=me.l;w.d=me.d;w.s=me.s-w.fol.ds*me.d;w.off=me.off+w.fol.doff;}else if(w.pause>0)w.pause-=dt;else{w.s+=w.v*w.d*dt;if(w.s>w.l.len||w.s<0)hop(w,false);else if(!w.me&&Math.random()<.0006)w.pause=rnd(3,20);}
+    posOn(w.l,Math.max(0,Math.min(w.l.len,w.s)),w.off,_o);w.x=_o.x;w.y=_o.y;w.a=Math.atan2(_o.dx*w.d,-_o.dy*w.d);}
+  for(const c of cars){c.s+=c.v*c.d*dt;if(c.s>c.l.len||c.s<0)hop(c,true);posOn(c.l,Math.max(0,Math.min(c.l.len,c.s)),2.3*PM*c.d,_o);c.x=_o.x;c.y=_o.y;c.a=Math.atan2(_o.dx*c.d,-_o.dy*c.d);}}
+function drawLife(){const k=K();if(V.z<15.6)return;const m=60;
+  if(V.z>=16){const s=k*PM/20*1.3;for(const c of cars){const sx=(c.x-V.x)*k+cw/2,sy=(c.y-V.y)*k+ch/2;if(sx<-m||sy<-m||sx>cw+m||sy>ch+m)continue;ctx.save();ctx.translate(sx,sy);ctx.rotate(c.a);ctx.scale(s,s);ctx.drawImage(c.sp.c,-c.sp.w,-c.sp.cy*2);ctx.restore();}}
+  const u=Math.max(1.6,.5*PM*k*2.8);
+  const el=(x,y,rx,ry,f)=>{ctx.fillStyle=f;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,6.2832);ctx.fill();};
+  for(const w of walkers){const sx=(w.x-V.x)*k+cw/2,sy=(w.y-V.y)*k+ch/2;if(sx<-m||sy<-m||sx>cw+m||sy>ch+m)continue;
+    if(w.me){ctx.beginPath();ctx.arc(sx,sy,Math.max(9,u*2.6),0,6.2832);ctx.fillStyle='rgba(244,176,74,.2)';ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#f4b04a';ctx.stroke();}
+    if(u<3.2){ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(sx-u/2+1,sy-u/2+1,u,u);ctx.fillStyle=w.c;ctx.fillRect(sx-u/2,sy-u/2,u,u);continue;}
+    const q=(Math.floor(Math.abs(w.s)/(.72*PM))&1)?1:-1;ctx.save();ctx.translate(sx,sy);ctx.rotate(w.a);
+    el(u*.16,u*.18,u*.52,u*.33,'rgba(0,0,0,.36)');el(-u*.2,-u*.32*q,u*.13,u*.22,'#1b1b1d');el(u*.2,u*.32*q,u*.13,u*.22,'#1b1b1d');
+    el(-u*.53,u*.16*q,u*.115,u*.165,'#c99a7c');el(u*.53,-u*.16*q,u*.115,u*.165,'#c99a7c');el(0,0,u*.5,u*.285,w.c);
+    if(w.me){ctx.strokeStyle='#7a4a2a';ctx.lineWidth=Math.max(1,u*.1);ctx.beginPath();ctx.moveTo(-u*.4,-u*.17);ctx.lineTo(u*.4,u*.17);ctx.stroke();el(u*.46,u*.23,u*.155,u*.125,'#7a4a2a');}
+    el(0,-u*.04,u*.225,u*.235,w.h);ctx.restore();}
+  const me=walkers[0];if(me&&me.me){const sx=(me.x-V.x)*k+cw/2,sy=(me.y-V.y)*k+ch/2;if(sx>0&&sy>0&&sx<cw&&sy<ch){ctx.font='600 13px system-ui,sans-serif';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.85)';const ty=sy-Math.max(13,u*3);ctx.strokeText('You',sx,ty);ctx.fillStyle='#fff';ctx.fillText('You',sx,ty);}}}
+
+// ---------------- world: a rendered 3D city you zoom into, landmark by landmark
+const CH=[
+ {id:'rsq',en:'Republic Square',hy:'Հանրապետության հրապարակ',x:.61,y:.285,air:'air_rsq.mp4',street:'rsq'},
+ {id:'north',en:'Northern Avenue',hy:'Հյուսիսային պողոտա',x:.605,y:.47,air:'air_north.mp4',street:'north'},
+ {id:'cascade',en:'Cascade',hy:'Կասկադ',x:.565,y:.86,air:'air_cascade.mp4',street:'cascade'},
+ {id:'vern',en:'Vernissage',hy:'Վերնիսաժ',x:.82,y:.39,air:'air_vern.mp4',street:'vern'},
+ {id:'opera',en:'Opera park',hy:'Օպերա',x:.455,y:.385,air:null,street:'park'},
+ {id:'yard',en:'A courtyard street',hy:'Բակ',x:.2,y:.62,air:null,street:'res'}];
+const W={x:.5,y:.5,s:1},wimg=$('wimg'),wel=$('world');let wanim=null,iw=2688,ih=1520;
+wimg.addEventListener('load',()=>{iw=wimg.naturalWidth||iw;ih=wimg.naturalHeight||ih;});
+function wLayout(){const k=Math.max(cw/iw,ch/ih)*W.s,dw=iw*k,dh=ih*k,hx=cw/2/dw,hy=ch/2/dh;W.x=Math.max(hx,Math.min(1-hx,W.x));W.y=Math.max(hy,Math.min(1-hy,W.y));const L=cw/2-W.x*dw,T=ch/2-W.y*dh;
+  wimg.style.transform='translate('+L.toFixed(2)+'px,'+T.toFixed(2)+'px) scale('+k.toFixed(5)+')';
+  for(const h of CH)if(h.el)h.el.style.transform='translate('+(L+h.x*dw).toFixed(1)+'px,'+(T+h.y*dh-9).toFixed(1)+'px) translateX(-50%)';}
+function nearHot(px,py){const x=px===undefined?W.x:px,y=py===undefined?W.y:py;let b=null,bd=.17;for(const h of CH){const d=Math.hypot(h.x-x,(h.y-y)*ih/iw);if(d<bd){bd=d;b=h;}}return b;}
+function wZoom(px,py,ds){const bs=Math.max(cw/iw,ch/ih),k0=bs*W.s,ix=W.x+(px-cw/2)/(iw*k0),iy=W.y+(py-ch/2)/(ih*k0);W.s=Math.max(1,Math.min(2.7,W.s*Math.pow(2,ds)));const k1=bs*W.s;W.x=ix-(px-cw/2)/(iw*k1);W.y=iy-(py-ch/2)/(ih*k1);if(ds>0&&W.s>=2.15){const h=nearHot(ix,iy)||nearHot();if(h)enter(h);}}
+function wFly(x,y,sc,ms,then){const a={x:W.x,y:W.y,s:W.s},t0=performance.now();wanim=now=>{let u=Math.max(0,Math.min(1,(now-t0)/ms));u=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;W.x=a.x+(x-a.x)*u;W.y=a.y+(y-a.y)*u;W.s=a.s+(sc-a.s)*u;if(u>=1){wanim=null;if(then)then();}};}
+function showAir(h){airOf=h;W.x=h.x;W.y=h.y;W.s=2;show({id:'air_'+h.id,en:h.en+' from the air',hy:h.hy,m:h.air,cap:'AI-generated aerial scene. An illustration, not real footage.',air:1});}
+function enter(h){if(scene)return;if(h.air)showAir(h);else{airOf=null;W.x=h.x;W.y=h.y;W.s=2;show(byId(h.street));}}
+function mkHots(){const box=$('whot');box.textContent='';for(const h of CH){const b=document.createElement('button');b.className='pin';b.appendChild(document.createTextNode(h.hy));const sm=document.createElement('small');sm.textContent=h.en;b.appendChild(sm);b.addEventListener('click',()=>{wFly(h.x,h.y,2.3,900,()=>enter(h));});box.appendChild(b);h.el=b;}}
+function back(){if(cur&&cur.act){go(cur.ret);return;}if(mode==='street'&&airOf&&airOf.air){showAir(airOf);return;}toBase();}
+const wp=new Map();let wpin=0;
+wel.addEventListener('pointerdown',e=>{if(scene||e.target.closest('.pin'))return;wel.setPointerCapture(e.pointerId);wp.set(e.pointerId,[e.clientX,e.clientY]);wanim=null;wel.classList.add('drag');if(wp.size===2){const p=[...wp.values()];wpin=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);}});
+wel.addEventListener('pointermove',e=>{if(scene||!wp.has(e.pointerId))return;const o=wp.get(e.pointerId),dx=e.clientX-o[0],dy=e.clientY-o[1];wp.set(e.pointerId,[e.clientX,e.clientY]);
+  if(wp.size===1){const k=Math.max(cw/iw,ch/ih)*W.s;W.x-=dx/(iw*k);W.y-=dy/(ih*k);}
+  else if(wp.size===2){const p=[...wp.values()],d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);if(wpin>0&&d>0)wZoom((p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2,Math.log2(d/wpin));wpin=d;}});
+function wup(e){wp.delete(e.pointerId);if(wp.size<2)wpin=0;if(!wp.size)wel.classList.remove('drag');}
+wel.addEventListener('pointerup',wup);wel.addEventListener('pointercancel',wup);
+let hintState='',wacc=0,wlock=0;
+function setHint(){let h;if(scene)h=mode==='air'?(airOf&&airOf.street?'Zoom in again to step onto the street. Zoom out to return to the city.':'Zoom out to return to the city.'):(SPOT[cur&&cur.id]||(cur&&cur.act))&&era==='now'?'Choose what to do next. Number keys work too. Zoom out to go back up.':'Zoom out to go back up.';
+  else if(base==='world')h='A rendered 3D city. Scroll, pinch or press + to zoom into a landmark, or tap an orange pin.';
+  else h=V.z>17.2?'Keep zooming in to step onto the street.':V.z>15.5?'The ringed figure is you. Tap a person or a car to see who it is.':'Drag to move. Scroll, pinch or press + to zoom. Zoom all the way in to step onto the street.';
+  if(h!==hintState){hintState=h;$('hint').textContent=h;}}
+
+// ---------------- game: walk on, shop, do what people do
+const QUESTS=[['fruit','Buy apricots at the market'],['coffee','Drink an Armenian coffee'],['dance','Join the circle dance'],['souvenir','Take home a carpet or a painting'],['lavash','Pick up hot lavash'],['nardi','Play nardi with the neighbours'],['view','See Ararat from the top of the Cascade'],['feast','Share a khorovats dinner in the village']];
+const SPOT={
+ north:{moves:[['rsq','Walk down to Republic Square'],['abov','Turn onto Abovyan Street'],['park','Walk up to the Opera park']],acts:['coffee']},
+ abov:{moves:[['north','Back to Northern Avenue'],['rsq','Down to Republic Square']],acts:['coffee']},
+ rsq:{moves:[['north','Walk up Northern Avenue'],['vern','Cross to the Vernissage market'],['ave','Follow the avenue'],['gum','Taxi to GUM market',700]],acts:['dance']},
+ vern:{moves:[['rsq','Back to Republic Square'],['gum','Walk on to GUM market']],acts:['carpet']},
+ gum:{moves:[['vern','Walk back to Vernissage'],['rsq','Taxi to Republic Square',700],['rural','Marshrutka to a village in the Ararat valley',500]],acts:['fruit']},
+ ave:{moves:[['rsq','To Republic Square'],['res','Turn into a courtyard'],['park','Walk to the Opera park']],acts:['lavash']},
+ res:{moves:[['ave','Back out to the avenue']],acts:['nardi']},
+ park:{moves:[['north','Down to Northern Avenue'],['saryan','To the painters in Saryan park'],['cascade','On to the Cascade'],['ave','Out to the avenue']],acts:[]},
+ saryan:{moves:[['park','Back to the Opera park'],['cascade','Up to the Cascade']],acts:['painting']},
+ cascade:{moves:[['saryan','Down to the painters'],['park','Back to the Opera park']],acts:['view']},
+ rural:{moves:[['gum','Marshrutka back to the city',500]],acts:['feast']}};
+const ACTS={
+ fruit:{label:'Buy a bag of apricots',cost:1200,item:'apricots',quest:'fruit',m:'act_fruit.mp4',en:'Apricots from the market',hy:'Ծիրան'},
+ coffee:{label:'Sit down for Armenian coffee',cost:900,quest:'coffee',m:'act_coffee.mp4',en:'Armenian coffee',hy:'Հայկական սուրճ'},
+ dance:{label:'Join the circle dance',cost:0,quest:'dance',m:'act_dance.mp4',en:'Dancing in the square',hy:'Քոչարի'},
+ carpet:{label:'Buy a small carpet',cost:18000,item:'small carpet',quest:'souvenir',m:'act_carpet.jpg',en:'A carpet from Vernissage',hy:'Գորգ'},
+ painting:{label:'Buy a painting of Ararat',cost:12000,item:'painting of Ararat',quest:'souvenir',m:'act_painting.jpg',en:'A painting from the painter',hy:'Նկար'},
+ lavash:{label:'Buy hot lavash',cost:300,item:'lavash',quest:'lavash',m:'act_lavash.jpg',en:'Hot lavash from the tonir',hy:'Լավաշ'},
+ nardi:{label:'Play a game of nardi',cost:0,quest:'nardi',m:'act_nardi.jpg',en:'Nardi in the courtyard',hy:'Նարդի'},
+ view:{label:'Climb to the top',cost:0,quest:'view',m:'act_top.jpg',en:'The top of the Cascade',hy:'Կասկադ'},
+ feast:{label:'Join the khorovats table',cost:0,quest:'feast',m:'act_khorovats.jpg',en:'Khorovats in the village',hy:'Խորոված'}};
+const SAVE='walk-armenia-day';let G={dram:35000,bag:[],done:{}};
+try{const q=JSON.parse(localStorage.getItem(SAVE)||'null');if(q&&typeof q.dram==='number'&&Array.isArray(q.bag)&&q.done)G=q;}catch(e){}
+const save=()=>{try{localStorage.setItem(SAVE,JSON.stringify(G));}catch(e){}};
+const fmt=n=>'֏ '+n.toLocaleString('en-US');
+const nDone=()=>QUESTS.filter(q=>G.done[q[0]]).length;
+function gameUI(){const box=$('game'),it=cur,on=!!(scene&&mode==='street'&&it&&era==='now'&&(SPOT[it.id]||it.act));box.classList.toggle('on',on);document.body.classList.toggle('play',on);if(!on)return;
+  $('gWallet').textContent=fmt(G.dram);$('gBag').textContent=G.bag.length?G.bag.join(', '):'empty';$('gProg').textContent=nDone()+' of '+QUESTS.length+' done';
+  const ql=$('gQuests');ql.textContent='';for(const q of QUESTS){const li=document.createElement('li');li.textContent=q[1];if(G.done[q[0]])li.className='ok';ql.appendChild(li);}
+  const ch=$('gChoices');ch.textContent='';let k=1;
+  const add=(label,sub,fn,hot)=>{const b=document.createElement('button');b.className='choice'+(hot?' hot':'');const kk=document.createElement('kbd');kk.textContent=k++;b.appendChild(kk);const sp=document.createElement('span');sp.textContent=label;b.appendChild(sp);if(sub){const e=document.createElement('em');e.textContent=sub;b.appendChild(e);}b.addEventListener('click',fn);ch.appendChild(b);};
+  if(it.act){const r=byId(it.ret);add('Back to '+(r?r.en:'the street'),'',()=>go(it.ret));return;}
+  const sp=SPOT[it.id];for(const a of sp.acts||[]){const A=ACTS[a];add(A.label,A.cost?fmt(A.cost):(G.done[A.quest]?'done':'free'),()=>doAct(a,it.id),true);}
+  for(const m of sp.moves)add(m[1],m[2]?fmt(m[2]):'',()=>{if(m[2]){if(G.dram<m[2]){toast('Not enough dram','You have '+fmt(G.dram)+'.','');return;}G.dram-=m[2];save();}go(m[0]);});}
+function go(id){const it=byId(id);if(!it)return;airOf=CH.find(h=>h.street===id&&h.air)||null;if(airOf){W.x=airOf.x;W.y=airOf.y;W.s=2;}if(it.ll){const w=toW(it.ll);V.x=w[0];V.y=w[1];V.z=18.2;}show(it);}
+function doAct(a,from){const A=ACTS[a];if(A.cost&&G.dram<A.cost){toast('Not enough dram',A.label+' costs '+fmt(A.cost)+'. You have '+fmt(G.dram)+'.','');return;}
+  if(A.cost)G.dram-=A.cost;if(A.item)G.bag.push(A.item);const first=!G.done[A.quest];G.done[A.quest]=1;save();
+  show({id:'act_'+a,en:A.en,hy:A.hy,m:A.m,cap:ME,act:a,ret:from});
+  if(first){const n=nDone(),all=n===QUESTS.length;toast(all?'A full day in Armenia':'Done: '+QUESTS.find(q=>q[0]===A.quest)[1],all?'You did everything on today’s list.':n+' of '+QUESTS.length+' on today’s list.','');}}
+$('gReset').addEventListener('click',()=>{G={dram:35000,bag:[],done:{}};save();gameUI();});
+
+// ---------------- pins
+const pins=[];
+function mkPins(){const box=$('pins');box.textContent='';pins.length=0;const src=list().filter(q=>q.ll).map(q=>({en:q.en,hy:q.hy,ll:q.ll,it:q}));if(era==='now')for(const e of EXTRA_PINS)src.push({en:e.en,hy:e.hy,ll:e.ll,it:Object.assign({},byId(e.now),{en:e.en,hy:e.hy})});
+  for(const p of src){const b=document.createElement('button');b.className='pin';b.appendChild(document.createTextNode(p.hy));const s=document.createElement('small');s.textContent=p.en;b.appendChild(s);const w=toW(p.ll);p.x=w[0];p.y=w[1];p.el=b;b.addEventListener('click',()=>{flyTo(p.x,p.y,18.4,1100,()=>show(p.it));});box.appendChild(b);pins.push(p);}}
+function drawPins(){const vis=V.z>=13.4;for(const p of pins){const s=scr(p.x,p.y);p.el.style.transform=(vis&&s[0]>-80&&s[1]>-40&&s[0]<cw+80&&s[1]<ch+40)?'translate('+s[0].toFixed(1)+'px,'+(s[1]-9).toFixed(1)+'px) translateX(-50%)':'translate(-9999px,-9999px)';}}
+
+// ---------------- scenes
+function sceneAt(){let best=null,bd=1e18;for(const p of pins){const d=Math.hypot(p.x-V.x,p.y-V.y)*MPP;if(d<bd){bd=d;best=p;}}
+  if(best&&bd<(era==='now'?170:260))return best.it;
+  if(era==='96'){const L=OLD.filter(q=>q.m!=='map');return L[Math.abs(Math.round(V.x/90)+Math.round(V.y/70))%L.length];}
+  let ld=1e18,bl=null;for(const l of lines){for(let i=0;i<l.pts.length;i++){const dx=l.pts[i][0]-V.x,dy=l.pts[i][1]-V.y,d=dx*dx+dy*dy;if(d<ld){ld=d;bl=l;}}}
+  const k=bl?bl.cls:'';return byId((k==='pedestrian'||k==='path')?'park':(k==='primary'||k==='secondary'||k==='trunk'||k==='tertiary')?'ave':'res');}
+function dive(){if(scene)return;const it=sceneAt();if(it)show(it);}
+function strip(){const s=$('strip');s.textContent='';for(const it of list()){const b=document.createElement('button');b.className='card';b.setAttribute('aria-pressed','false');b.dataset.id=it.id;
+  const im=document.createElement('img');im.src=thumb(it);im.alt='';im.loading='lazy';b.appendChild(im);if(it.tag){const t=document.createElement('i');t.textContent=it.tag;b.appendChild(t);}
+  const sp=document.createElement('span');sp.textContent=it.en;b.appendChild(sp);b.addEventListener('click',()=>{if(it.ll){const w=toW(it.ll);V.x=w[0];V.y=w[1];V.z=18.2;clampV();}airOf=(base==='world'&&era==='now')?(CH.find(h=>h.street===it.id)||null):null;if(airOf){W.x=airOf.x;W.y=airOf.y;W.s=2;}show(it);});s.appendChild(b);}}
+function mark(id){for(const b of document.querySelectorAll('.card')){const on=b.dataset.id===id;b.setAttribute('aria-pressed',on);if(on&&b.scrollIntoView)b.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});}}
+function toBase(){scene=false;mode=base;airOf=null;document.body.classList.remove('scene');document.body.dataset.base=base;for(const L of[$('A'),$('B')]){L.classList.remove('on');for(const v of L.querySelectorAll('video'))v.pause();}vid=null;cur=byId(base==='world'?'world':'map');$('zoom').classList.remove('on');size();if(base==='sat'){if(V.z>18.3)V.z=18.3;clampV();}mark(cur?cur.id:'');wlock=performance.now()+700;wacc=0;setHint();gameUI();}
+function show(it){if(!it)return;if(it.m==='map'||it.m==='world'){base=it.m==='map'?'sat':'world';toBase();return;}cur=it;scene=true;anim=null;wanim=null;mode=it.air?'air':'street';wlock=performance.now()+900;wacc=0;document.body.classList.add('scene');$('toast').classList.remove('on');const old=lay;lay=old===$('A')?$('B'):$('A');lay.textContent='';lay.className='lay'+(it.tall?' tall':'');vid=null;
+  if(it.tall)lay.style.setProperty('--bg','url('+thumb(it)+')');
+  if(/\.mp4$/.test(it.m)){const v=document.createElement('video');v.src=it.m;v.muted=!sound;v.playsInline=true;v.setAttribute('playsinline','');v.autoplay=true;v.loop=it.id!=='film';v.preload='auto';vid=v;
+    if(it.id==='film'){v.addEventListener('timeupdate',()=>{if(v.duration&&!scrubbing)$('scrub').value=Math.round(v.currentTime/v.duration*1000);});v.addEventListener('ended',()=>{if(cur===it){const n=byId('north'),w=toW(n.ll);V.x=w[0];V.y=w[1];V.z=18.2;show(n);}});}
+    lay.appendChild(v);const p=v.play();if(p&&p.catch)p.catch(()=>{});}
+  else{const im=document.createElement('img');im.src=it.m;im.className='kb';im.alt=it.en+' (AI-generated scene)';lay.appendChild(im);}
+  requestAnimationFrame(()=>{lay.classList.add('on');old.classList.remove('on');});
+  setTimeout(()=>{if(old!==lay){for(const v of old.querySelectorAll('video'))v.pause();old.textContent='';}},1000);
+  $('title').textContent=it.en;$('hy').textContent=it.hy;$('cap').textContent=it.cap||'';$('zoom').classList.toggle('on',it.id==='film');mark(it.air?((airOf&&airOf.street)||''):it.act?it.ret:it.id);setHint();gameUI();}
+let scrubbing=false;
+$('scrub').addEventListener('input',e=>{if(!vid||!vid.duration)return;scrubbing=true;vid.pause();vid.currentTime=e.target.value/1000*vid.duration;});
+$('scrub').addEventListener('change',()=>{scrubbing=false;if(vid){const p=vid.play();if(p&&p.catch)p.catch(()=>{});}});
+function setEra(e){era=e;document.body.classList.toggle('e96',e==='96');$('e96').setAttribute('aria-pressed',e==='96');$('eNow').setAttribute('aria-pressed',e==='now');base=e==='96'?'sat':'world';strip();mkPins();spawn();toBase();}
+$('e96').addEventListener('click',()=>setEra('96'));$('eNow').addEventListener('click',()=>setEra('now'));
+$('back').addEventListener('click',()=>back());
+$('how').addEventListener('click',()=>{const on=!$('about').classList.contains('on');$('about').classList.toggle('on',on);$('how').setAttribute('aria-expanded',on);});
+$('snd').addEventListener('click',()=>{sound=!sound;$('snd').setAttribute('aria-pressed',sound);if(vid){vid.muted=!sound;const p=vid.play();if(p&&p.catch)p.catch(()=>{});}});
+$('zin').addEventListener('click',()=>{if(scene){if(mode==='air'&&airOf&&airOf.street)show(byId(airOf.street));return;}if(base==='world'){const sc=Math.min(2.7,W.s*1.6);wFly(W.x,W.y,sc,350,()=>{if(sc>=2.15){const h=nearHot();if(h)enter(h);}});return;}const z=Math.min(ZMAX,V.z+1);flyTo(V.x,V.y,z,350,()=>{if(z>=ZDIVE)dive();});});
+$('zout').addEventListener('click',()=>{if(scene){back();return;}if(base==='world'){wFly(W.x,W.y,Math.max(1,W.s/1.6),350);return;}flyTo(V.x,V.y,Math.max(ZMIN,V.z-1),350);});
+$('findme').addEventListener('click',()=>{const me=walkers[0];if(me&&me.me)flyTo(me.x,me.y,18.6,1200);else toast('You','You appear on the map in Today mode.','');});
+function toast(a,b,c){const t=$('toast');t.textContent='';const B=document.createElement('b');B.textContent=a;const d=document.createElement('div');d.textContent=b;t.append(B,d);if(c){const e=document.createElement('em');e.textContent=c;t.appendChild(e);}t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),6500);}
+
+// ---------------- pointer, wheel, keys
+const ptr=new Map();let moved=0,pinch=0;
+cv.addEventListener('pointerdown',e=>{if(scene)return;cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);dragging=true;moved=0;anim=null;cv.classList.add('drag');if(ptr.size===2){const p=[...ptr.values()];pinch=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);}});
+cv.addEventListener('pointermove',e=>{if(scene||!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId),dx=e.clientX-o[0],dy=e.clientY-o[1];ptr.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptr.size===1){const k=K();V.x-=dx/k;V.y-=dy/k;moved+=Math.abs(dx)+Math.abs(dy);clampV();}
+  else if(ptr.size===2){const p=[...ptr.values()],d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);if(pinch>0&&d>0)zoomAt((p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2,Math.log2(d/pinch));pinch=d;moved+=9;}});
+function up(e){if(!ptr.has(e.pointerId))return;ptr.delete(e.pointerId);if(ptr.size<2)pinch=0;if(ptr.size===0){dragging=false;cv.classList.remove('drag');if(moved<6&&!scene)tap(e.clientX,e.clientY);}}
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+$('stage').addEventListener('wheel',e=>{e.preventDefault();const dy=e.deltaY*(e.deltaMode?40:1),now=performance.now();if(now<wlock)return;
+  if(scene){wacc-=dy;if(wacc>220){wacc=0;if(mode==='air'&&airOf&&airOf.street)show(byId(airOf.street));}else if(wacc<-220){wacc=0;back();}return;}
+  if(base==='world'){wanim=null;wZoom(e.clientX,e.clientY,-dy*.0016);return;}
+  anim=null;zoomAt(e.clientX,e.clientY,-dy*.0022);},{passive:false});
+function tap(px,py){if(V.z<15.6)return;const k=K();let bw=null,bd=22;for(const w of walkers){const d=Math.hypot((w.x-V.x)*k+cw/2-px,(w.y-V.y)*k+ch/2-py);if(d<bd){bd=d;bw=w;}}let bc=null,cd=26;for(const c of cars){const d=Math.hypot((c.x-V.x)*k+cw/2-px,(c.y-V.y)*k+ch/2-py);if(d<cd){cd=d;bc=c;}}
+  if(bw&&bw.me){flyTo(bw.x,bw.y,ZMAX,1300,dive);return;}
+  if(bc&&(!bw||cd<bd))toast(bc.model,bc.note,'Simulated. The mix follows what is driven in Armenia '+(era==='96'?'in the mid-1990s.':'today.'));
+  else if(bw)toast(bw.name,bw.fol?'Walking with you.':bw.age+' · '+bw.role+'.','Simulated resident on a real street.');}
+window.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='Escape'){$('about').classList.remove('on');if(scene){back();return;}}if(scene&&/^[1-9]$/.test(e.key)){const b=$('gChoices').children[+e.key-1];if(b&&$('game').classList.contains('on'))b.click();return;}if(scene){const L=list().filter(q=>q.m!=='map'&&q.m!=='world'),i=L.indexOf(cur);if(e.key==='ArrowRight')show(L[(i+1)%L.length]);else if(e.key==='ArrowLeft')show(L[(i-1+L.length)%L.length]);return;}
+  if(e.key==='+'||e.key==='='){$('zin').click();return;}if(e.key==='-'){$('zout').click();return;}if(base==='world'){if(e.key==='ArrowLeft')W.x-=.03;else if(e.key==='ArrowRight')W.x+=.03;else if(e.key==='ArrowUp')W.y-=.04;else if(e.key==='ArrowDown')W.y+=.04;return;}const st=90/K();if(e.key==='ArrowLeft'){V.x-=st;clampV();}else if(e.key==='ArrowRight'){V.x+=st;clampV();}else if(e.key==='ArrowUp'){V.y-=st;clampV();}else if(e.key==='ArrowDown'){V.y+=st;clampV();}});
+
+// ---------------- loop
+let last=performance.now();
+function frame(now){requestAnimationFrame(frame);const dt=Math.min(.1,(now-last)/1000);last=now;if(scene)return;
+  if(base==='world'){if(wanim)wanim(now);if(scene)return;wLayout();setHint();return;}
+  if(anim){anim(now);clampV();}if(scene)return;step(dt,now);drawMap();drawLife();drawPins();setHint();}
+strip();mkPins();mkHots();clampV();spawn();toBase();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

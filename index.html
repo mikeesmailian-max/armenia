@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walk Armenia</title>
+<style>
+:root{--ink:#f6efe4;--dim:#c9bfb0;--panel:rgba(14,17,24,.8);--line:rgba(255,255,255,.16);--apricot:#f4b04a;--night:#0c0f15;--red:#e2533f;
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;--body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--night);color:var(--ink);font:14px/1.4 var(--body);overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+button{font:600 13px/1 var(--body);color:var(--ink);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer}
+button:hover{background:rgba(255,255,255,.16)}
+button:focus-visible{outline:2px solid var(--apricot);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#hud{position:fixed;left:12px;top:12px;z-index:3;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+#stats{padding:8px 12px;display:flex;gap:14px;align-items:center}
+#wallet{font:600 20px/1 var(--display);color:var(--apricot);white-space:nowrap}
+#energy{width:110px;height:8px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden}
+#energy i{display:block;height:100%;width:100%;background:#7fc47a}
+#stars{letter-spacing:2px;font-size:16px;color:rgba(255,255,255,.25);white-space:nowrap}
+#stars b{color:var(--red)}
+#hold{font-size:12px;color:var(--dim);white-space:nowrap}
+#street{padding:6px 12px;font-size:12.5px;width:max-content;max-width:60vw}
+#street b{font:600 15px/1.2 var(--display)}
+#street span{color:var(--apricot);margin-left:6px}
+#side{position:fixed;right:12px;top:12px;z-index:3;width:min(270px,44vw);padding:10px 12px;font-size:12.5px}
+#side summary{cursor:pointer;font-weight:600}
+#quests{margin:8px 0 6px;padding-left:18px;color:var(--dim)}
+#quests li.ok{color:var(--ink);text-decoration:line-through}
+#side .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+#side button{font-size:12px;padding:6px 8px}
+#mini{position:fixed;left:12px;bottom:12px;z-index:3;width:176px;height:176px;border-radius:50%;border:2px solid rgba(255,255,255,.5);box-shadow:0 2px 12px rgba(0,0,0,.6);background:#111}
+#prompt{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:3;padding:9px 14px;display:none;gap:14px;align-items:center;white-space:nowrap;font-weight:600}
+#prompt.on{display:flex}
+#prompt span{display:flex;gap:6px;align-items:center}
+kbd{font:700 12px/1 var(--body);background:var(--apricot);color:#2a1610;border-radius:5px;padding:4px 7px}
+#toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:5;padding:9px 14px;border-left:3px solid var(--apricot);max-width:min(460px,calc(100vw - 24px));display:none}
+#toast.on{display:block}
+#toast b{display:block;font:600 16px/1.2 var(--display)}
+#toast em{display:block;font-style:normal;color:var(--apricot);font-size:13px}
+#labels{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden}
+.lab{position:absolute;left:0;top:0;transform:translate(-9999px,-9999px);text-align:center;white-space:nowrap;font:600 12px/1.2 var(--body);color:#fff;text-shadow:0 0 3px #000,0 1px 2px #000}
+.lab b{display:block;font:600 14px/1.1 var(--display);color:var(--apricot)}
+.lab.say{background:#fff;color:#16181d;text-shadow:none;border-radius:10px;padding:6px 10px;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.lab.say b{color:#b4321f;font:700 16px/1.15 var(--display)}
+.lab.say i{display:block;font-style:normal;color:#555;font-size:11.5px}
+.ov{position:fixed;inset:0;z-index:8;display:none;align-items:center;justify-content:center;background:rgba(6,8,12,.55)}
+.ov.on{display:flex}
+.box{width:min(600px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:16px 18px}
+.box h2{margin:0 0 4px;font:600 26px/1.15 var(--display)}
+.box h2 small{display:block;font:500 12px/1.4 var(--body);color:var(--dim);letter-spacing:.04em;margin-top:4px}
+.who{font-size:12px;color:var(--dim);margin-bottom:6px}
+.who b{font:600 16px/1 var(--display);color:var(--apricot);margin-right:6px}
+.you{font-size:12.5px;color:var(--dim);margin-bottom:6px;min-height:0}
+.hy{font:600 24px/1.25 var(--display)}
+.tr{color:var(--apricot);font-size:14px;font-style:italic;margin-top:2px}
+.en{color:#e6ddcf;font-size:14px;margin-top:2px}
+.opts{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.opt{display:flex;align-items:center;gap:9px;text-align:left;padding:9px 10px;font-weight:500;line-height:1.25}
+.opt kbd{background:rgba(0,0,0,.5);color:var(--dim)}
+.opt span{flex:1}
+.opt small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.opt em{font-style:normal;color:var(--apricot);white-space:nowrap}
+#start .box{width:min(680px,calc(100vw - 24px))}
+#start{background:linear-gradient(rgba(6,8,12,.35),rgba(6,8,12,.75))}
+#keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:12px 0;font-size:13px;align-items:center}
+#keys kbd{justify-self:start;white-space:nowrap}
+#bar{height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden;margin:10px 0 4px}
+#bar i{display:block;height:100%;width:0;background:var(--apricot);transition:width .2s}
+#play{font-size:16px;padding:12px 22px;background:var(--apricot);color:#2a1610;border:0}
+#play[disabled]{opacity:.45;cursor:default}
+.note{color:var(--dim);font-size:12px;margin-top:10px}
+#cut{background:#000}
+#cut video,#cut img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#cutbar{position:absolute;left:0;right:0;bottom:0;padding:16px 18px;display:flex;gap:14px;align-items:flex-end;background:linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,0))}
+#cutbar div{flex:1}
+#cutbar h3{margin:0;font:600 28px/1.1 var(--display)}
+#cutbar p{margin:4px 0 0;color:var(--dim);font-size:12px}
+.lab.geo b{font:600 15px/1.1 var(--display);color:#fff}.lab.geo span{display:block;color:var(--apricot);font-size:12px}
+.lab.geo.go{pointer-events:auto;cursor:pointer;background:rgba(14,17,24,.82);border:1px solid var(--apricot);border-radius:10px;padding:5px 10px;text-shadow:none}.lab.geo.go:hover{background:rgba(60,40,10,.92)}.lab.geo.go b{color:var(--apricot)}.lab.geo.go span{color:#fff}
+#pano{background:#000;overflow:hidden;cursor:grab;align-items:stretch;justify-content:stretch}#pimg{position:absolute;left:0;top:0;max-width:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.pbar{position:absolute;left:0;right:0;bottom:0;padding:16px 18px;display:flex;gap:14px;align-items:flex-end;background:linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,0))}.pbar div{flex:1}.pbar h3{margin:0;font:600 28px/1.1 var(--display)}.pbar p{margin:4px 0 0;color:var(--dim);font-size:12px}
+.lab.you{background:var(--apricot);color:#2a1610;text-shadow:none;border-radius:10px;padding:3px 9px;font-weight:700;margin-top:-8px}
+#cam{position:fixed;left:12px;bottom:200px;z-index:3;display:flex;gap:6px;align-items:center}
+#cam button{background:var(--panel);backdrop-filter:blur(8px);padding:9px 12px}
+#bZin,#bZout{font-size:18px;line-height:14px;width:40px}
+.store{font-size:11px;font-weight:600;color:#fff;opacity:.92}.store small{display:block;font-weight:500;font-size:10px;color:#cfe3ff}
+#gps{padding:6px 8px 6px 12px;font-size:13px;font-weight:600;width:max-content;display:flex;gap:10px;align-items:center;border-left:3px solid #ffa21a;pointer-events:auto}
+#gps button{padding:3px 8px;font-size:12px}
+#map{background:#10151c;align-items:stretch;justify-content:stretch}
+#mapc{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+#mside{position:absolute;left:12px;top:12px;bottom:12px;width:min(270px,42vw);padding:10px;display:flex;flex-direction:column;gap:8px}
+#mside h3{margin:0;font:600 18px/1.2 var(--display)}
+#mq{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--ink);font:14px var(--body)}
+#mlist{flex:1;overflow:auto;display:flex;flex-direction:column;gap:4px}
+.mit{text-align:left;font-weight:500;padding:7px 9px;line-height:1.25}.mit small{display:block;color:var(--apricot);font-size:11.5px}
+#mtools{position:absolute;right:12px;top:12px;display:flex;gap:6px}#mtools button{background:var(--panel)}
+#mhelp{position:absolute;right:12px;bottom:12px;padding:8px 12px;font-size:12.5px;max-width:min(360px,60vw)}
+#mpop{position:absolute;width:260px;padding:10px 12px;display:none}#mpop b{display:block;font:600 17px/1.2 var(--display)}#mpop p{margin:3px 0 8px;font-size:12.5px;color:var(--dim)}#mpop .row{display:flex;gap:6px;flex-wrap:wrap}
+#mpStart{background:var(--apricot);color:#2a1610;border:0}
+#startrow{display:flex;gap:10px;align-items:center;margin:12px 0 0;flex-wrap:wrap}#startAt{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#161b24;color:var(--ink);font:14px var(--body)}
+body.photo #hud,body.photo #side,body.photo #mini,body.photo #cam,body.photo #prompt,body.photo #labels,body.photo #touch{display:none!important}
+#photo{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:6;display:none;gap:6px;padding:8px;border-radius:12px;background:rgba(10,12,16,.7);flex-wrap:wrap;justify-content:center}
+#phSnap{background:#fff;color:#111;border:0;font-weight:700}
+#cutC a.save{display:inline-block;margin-left:8px;padding:5px 10px;border-radius:8px;background:var(--apricot);color:#2a1610;font-weight:700;text-decoration:none}
+#touch{position:fixed;right:12px;bottom:12px;z-index:3;display:none;gap:8px}
+@media (pointer:coarse){#touch{display:flex}#mini{width:120px;height:120px}#prompt{bottom:80px}#cam{bottom:186px!important}#camTog{bottom:142px}}
+@media (max-width:640px){#side{display:none}#street{max-width:70vw}}
+
+#camTog{position:fixed;left:12px;bottom:200px;z-index:4;background:var(--panel);backdrop-filter:blur(8px);padding:9px 14px}
+#cam{flex-direction:column;align-items:stretch;bottom:244px!important}
+#cam:not(.open){display:none}
+#cam button{text-align:left}
+body.photo #camTog{display:none!important}
+@media (max-height:560px){#cam.open{flex-direction:row;flex-wrap:wrap;max-width:70vw}}
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0" aria-label="Free-roam game view of central Yerevan"></canvas>
+<div id="labels"></div>
+<div id="hud">
+  <div class="panel" id="stats"><span id="wallet"></span><span id="energy" title="Energy"><i></i></span><span id="stars" aria-label="Wanted level"></span><span id="hold"></span></div>
+  <div class="panel" id="street"></div>
+  <div class="panel" id="gps" style="display:none"><span id="gpsT"></span><button id="gpsX" aria-label="Stop GPS">Stop</button></div>
+</div>
+<aside class="panel" id="side"><details open><summary>To do in Yerevan · <span id="qprog"></span></summary><p style="margin:4px 0 2px;font-size:12px;opacity:.75">Click one for directions</p><ul id="quests"></ul></details>
+  <div class="row"><button id="bHelp">Controls</button><button id="bChar">Character (C)</button><button id="bReset">New day</button></div></aside>
+<canvas id="mini" width="352" height="352" aria-label="Map around you"></canvas>
+<button id="camTog" aria-expanded="false" title="Show or hide the controls">Menu ▾</button><div id="cam"><button id="bZout" aria-label="Zoom out" title="Zoom out">−</button><button id="bZin" aria-label="Zoom in" title="Zoom in">+</button><button id="bHome" title="Back down to street level">Street</button><button id="bMap" title="Open the map (M)">Map</button><button id="bNight" title="Time of day: real Yerevan time, day, sunset or night (N)">Time</button><button id="bSound" title="Sound on or off">Sound: on</button><button id="bPhone" title="Your phone: taxi, camera, jobs, friends (P)">Phone</button><button id="bFront" title="See him from the front (V)">Front view</button></div>
+<div class="panel" id="prompt"></div>
+<div class="panel" id="toast" role="status"></div>
+<div id="photo"><button id="phFilter">Filter: No filter</button><button id="phPose">Wave</button><button id="phSelfie">Selfie</button><button id="phSnap">Take photo</button><button id="phRec">Record 8 s</button><button id="phExit">Exit (O)</button></div>
+<script>(function(){var t=document.getElementById('camTog'),c=document.getElementById('cam');t.addEventListener('click',function(){var o=c.classList.toggle('open');t.setAttribute('aria-expanded',o);t.textContent=o?'Menu \u25b4':'Menu \u25be'});})();</script><div id="touch"><button data-k="e">E</button><button data-k="g">G</button><button data-k="t">T</button><button data-k="r">R</button><button data-k="f">F</button></div>
+
+<div class="ov on" id="start"><div class="panel box">
+  <h2>Քայլիր Հայաստանում<small>WALK ARMENIA · FREE ROAM, CENTRAL YEREVAN</small></h2>
+  <p id="lead">Real streets, real building footprints and real satellite ground for two kilometres around Northern Avenue. Walk anywhere, talk to people in Armenian, eat, take a car, and see what happens when you grab someone’s ice cream.</p>
+  <div id="keys">
+    <kbd>W</kbd><span>Walk forward. <b>S</b> walks back. Hold <b>Shift</b> to run.</span>
+    <kbd>A / D</kbd><span>Turn left and right. Arrow keys work too.</span>
+    <kbd>Mouse</kbd><span>Click the view to look around with the mouse (Esc lets go). Or hold <b>Ctrl</b> and move, or drag.</span>
+    <kbd>M</kbd><span>The map. Drag, zoom, search any real store. Click a spot for <b>Start here</b> or <b>GPS here</b>. The mouse wheel in the game zooms the camera; <b>V</b> shows him from the front, or switches between the driver's seat and outside when you drive; <b>N</b> changes the time of day; by default the sky follows the real clock in Yerevan. <b>P</b> is your phone: taxi, camera, jobs and friends. <b>O</b> opens the camera. Bars, cafés, restaurants and clubs are rooms you walk into: go to the counter or a table and press <b>E</b>.</span>
+    <kbd>E</kbd><span>Talk to the person in front of you: chat, argue, make peace or haggle. Or go into a place.</span>
+    <kbd>G</kbd><span>Grab the ice cream. <b>R</b> throws a punch.</span>
+    <kbd>T</kbd><span>Pick a pocket. Safer from behind; get caught and you earn a star.</span>
+    <kbd>F</kbd><span>Eat what you hold. Next to a car: take it, or get out.</span>
+    <kbd>C</kbd><span>Choose your character, or load your own 3D model.</span>
+  </div>
+  <div id="bar"><i></i></div><div class="note" id="loadmsg">Loading the city…</div>
+  <div id="startrow"><label for="startAt">Start at</label><select id="startAt"><option value="resume">Where I left off</option><option value="north">Northern Avenue</option><option value="rsq">Republic Square</option><option value="opera">The Opera</option><option value="cascade">The Cascade</option><option value="vern">Vernissage market</option><option value="club">A nightclub, at night</option><option value="map">Pick on the map</option></select><button id="play" disabled>Play</button></div>
+  <p class="note">A game, not footage. The main character is a 3D model built from your clip. The street scenes and cutscenes are AI-generated illustrations. Sign-up and photo upload are not built yet. Prices are game values.</p>
+</div></div>
+
+<div class="ov" id="talk"><div class="panel box" role="dialog" aria-label="Conversation">
+  <div class="who" id="tWho"></div><div class="you" id="tYou"></div>
+  <div class="hy" id="tHy" lang="hy"></div><div class="tr" id="tTr"></div><div class="en" id="tEn"></div>
+  <div class="opts" id="tOpts"></div>
+</div></div>
+
+<div class="ov" id="cut"><div id="cutmedia"></div><div id="cutbar"><div><h3 id="cutT"></h3><p id="cutC"></p></div><button id="cutGo">Continue (Enter)</button></div></div>
+
+<div class="ov" id="pano"><img id="pimg" alt="" draggable="false"><div class="pbar"><div><h3 id="panoT"></h3><p id="panoC"></p></div><button id="panoBack">Back to the map (Esc)</button></div></div>
+
+<div class="ov" id="chars"><div class="panel box" role="dialog" aria-label="Choose your character">
+  <h2>Choose your character<small>ԸՆՏՐԻՐ ՔՈ ԿԵՐՊԱՐԸ</small></h2>
+  <div class="opts" id="chList"></div>
+  <div class="opts"><label class="opt" style="cursor:pointer;border:1px dashed var(--apricot);border-radius:8px"><kbd>+</kbd><span>Load your own 3D character (.glb)<small>Make it the way this one was made: a full-body photo with the arms held away from the body, image-to-3D (Tripo H3.1), then auto-rigging. Download the rigged .glb and choose it here.</small></span><input type="file" id="chFile" accept=".glb,model/gltf-binary" hidden></label></div>
+  <p class="note">A model without a skeleton cannot walk, so rig it first. A character you load stays for this visit only. Sign-up, accounts and payment are not built; they need a hosted service outside this page.</p>
+  <p style="margin:12px 0 0"><button id="chClose">Close</button></p>
+</div></div>
+
+<div class="ov" id="map"><canvas id="mapc" aria-label="Map of Armenia"></canvas>
+  <div class="panel" id="mside"><h3>Քարտեզ · Map</h3><input id="mq" type="search" placeholder="Search a store, place or street" aria-label="Search a store, place or street"><div id="mlist"></div></div>
+  <div id="mtools"><button id="mOut" aria-label="Zoom out">−</button><button id="mIn" aria-label="Zoom in">+</button><button id="mMe">Where I am</button><button id="mArm">All Armenia</button><button id="mClose">Close (M)</button></div>
+  <div class="panel" id="mhelp">Drag to move. The wheel zooms where the cursor is. Click a spot or a place in the list, then <b>Start here</b> or <b>GPS here</b>.</div>
+  <div class="panel" id="mpop"><b id="mpT"></b><p id="mpS"></p><div class="row"><button id="mpStart">Start here</button><button id="mpGps">GPS here</button><button id="mpLook">Look around</button><button id="mpX">Close</button></div></div>
+</div>
+
+<div class="ov" id="info"><div class="panel box"><h2 id="iT"></h2><div id="iB" style="margin-top:10px"></div><p style="margin:14px 0 0"><button id="iOk">Close</button></p></div></div>
+
+<script src="city.js"></script>
+<script src="poi.js"></script>
+<script src="net.js"></script>
+<script src="arm.js"></script>
+<script src="models/me.js"></script>
+<script src="models/am.js"></script>
+<script src="models/af.js"></script>
+<script src="models/cop.js"></script>
+<script src="models/anim.js"></script>
+<script src="mocap.js"></script>
+<script src="vox.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
