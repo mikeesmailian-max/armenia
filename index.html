@@ -115,6 +115,7 @@ body.photo #hud,body.photo #side,body.photo #mini,body.photo #cam,body.photo #pr
 #cam button{text-align:left}
 body.photo #camTog{display:none!important}
 @media (max-height:560px){#cam.open{flex-direction:row;flex-wrap:wrap;max-width:70vw}}
+#film{position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at 50% 46%,rgba(0,0,0,0) 55%,rgba(0,0,0,.34) 100%)}#film:after{content:"";position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>")}
 </style>
 </head>
 <body>
@@ -128,7 +129,7 @@ body.photo #camTog{display:none!important}
 <aside class="panel" id="side"><details open><summary>To do in Yerevan · <span id="qprog"></span></summary><p style="margin:4px 0 2px;font-size:12px;opacity:.75">Click one for directions</p><ul id="quests"></ul></details>
   <div class="row"><button id="bHelp">Controls</button><button id="bChar">Character (C)</button><button id="bReset">New day</button></div></aside>
 <canvas id="mini" width="352" height="352" aria-label="Map around you"></canvas>
-<button id="camTog" aria-expanded="false" title="Show or hide the controls">Menu ▾</button><div id="cam"><button id="bZout" aria-label="Zoom out" title="Zoom out">−</button><button id="bZin" aria-label="Zoom in" title="Zoom in">+</button><button id="bHome" title="Back down to street level">Street</button><button id="bMap" title="Open the map (M)">Map</button><button id="bNight" title="Time of day: real Yerevan time, day, sunset or night (N)">Time</button><button id="bSound" title="Sound on or off">Sound: on</button><button id="bPhone" title="Your phone: taxi, camera, jobs, friends (P)">Phone</button><button id="bFront" title="See him from the front (V)">Front view</button></div>
+<div id="film"></div><button id="camTog" aria-expanded="false" title="Show or hide the controls">Menu ▾</button><div id="cam"><button id="bZout" aria-label="Zoom out" title="Zoom out">−</button><button id="bZin" aria-label="Zoom in" title="Zoom in">+</button><button id="bHome" title="Back down to street level">Street</button><button id="bMap" title="Open the map (M)">Map</button><button id="bNight" title="Time of day: real Yerevan time, day, sunset or night (N)">Time</button><button id="bSound" title="Sound on or off">Sound: on</button><button id="bPhone" title="Your phone: taxi, camera, jobs, friends (P)">Phone</button><button id="bFront" title="See him from the front (V)">Front view</button></div>
 <div class="panel" id="prompt"></div>
 <div class="panel" id="toast" role="status"></div>
 <div id="photo"><button id="phFilter">Filter: No filter</button><button id="phPose">Wave</button><button id="phSelfie">Selfie</button><button id="phSnap">Take photo</button><button id="phRec">Record 8 s</button><button id="phExit">Exit (O)</button></div>
