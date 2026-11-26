@@ -1405,21 +1405,28 @@
     }
 
     // =========================================================================
-    // 3. BETTER 3RD-PERSON CAMERA (OTS / CLASSIC / WIDE + COLLISION + JUICE)
+    // 3. AAA 35mm CINEMA 3RD-PERSON CAMERA (OTS / CLASSIC / WIDE + SHOULDER SWAP)
     // =========================================================================
     const CAM_MODES = [
-      { id: "ots",     name: "OTS",     dist: 3.55, shoulder: 0.44, height: 1.56, lookAhead: 2.8, fov: 55, sprintFov: 64 },
-      { id: "classic", name: "Classic", dist: 5.05, shoulder: 0.14, height: 1.62, lookAhead: 2.5, fov: 58, sprintFov: 66 },
-      { id: "wide",    name: "Wide",    dist: 7.40, shoulder: 0.00, height: 1.78, lookAhead: 3.0, fov: 60, sprintFov: 68 }
+      { id: "ots",     name: "35mm OTS", dist: 3.18, shoulder: 0.46, height: 1.50, lookAhead: 3.0, fov: 49, sprintFov: 58 },
+      { id: "classic", name: "Classic",  dist: 4.85, shoulder: 0.16, height: 1.58, lookAhead: 2.6, fov: 54, sprintFov: 62 },
+      { id: "wide",    name: "Wide",     dist: 7.20, shoulder: 0.00, height: 1.74, lookAhead: 3.1, fov: 58, sprintFov: 66 }
     ];
     let camModeIdx = state.camMode % CAM_MODES.length;
-    let smoothDist = 3.55;
+    let smoothDist = 3.18;
     let bobPhase = 0;
-    let smoothFov = 55;
+    let smoothFov = 49;
     let smoothLookX = 0, smoothLookZ = 0;
+    let shoulderTarget = 1, shoulderSide = 1;
     let dramaZoomTimer = 0;
     let prevPlayerA = P.a;
     let bankAngle = 0;
+
+    window.addEventListener("keydown", (ev) => {
+      if (!G.ui.open && ev.key.toLowerCase() === "q" && !ev.repeat) {
+        shoulderTarget = -shoulderTarget;
+      }
+    });
 
     function applyCamPreset(idx, quiet) {
       camModeIdx = ((idx % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
@@ -1429,7 +1436,7 @@
       if (!C.Fi() && !G.INT.on) C.xr = m.dist;
       const btn = UI.fe("bCamMode");
       if (btn) btn.textContent = "3rd Cam: " + m.name + " (B)";
-      if (!quiet) UI.de("3rd-Person Camera: " + m.name, "", m.id === "ots" ? "Cinematic over-the-shoulder Yerevan street framing." : m.id === "classic" ? "Balanced 3rd-person follow view." : "Wide architectural view of central Yerevan.");
+      if (!quiet) UI.de("3rd-Person Camera: " + m.name, "", m.id === "ots" ? "35mm cinema over-the-shoulder framing (press Q to swap shoulder)." : m.id === "classic" ? "Balanced 3rd-person follow view." : "Wide architectural view of central Yerevan.");
     }
 
     const camBtn = UI.fe("bCamMode");
@@ -1440,10 +1447,11 @@
     window.__hyperCam = function (dt) {
       const t = P;
       const mode = CAM_MODES[camModeIdx];
-      const baseH = t.car ? 1.68 : mode.height;
+      const baseH = t.car ? 1.66 : mode.height;
 
-      // Smooth target zoom distance
+      // Smooth target zoom distance & left/right shoulder glide
       C.zr += (C.xr - C.zr) * Math.min(1, dt * 7);
+      shoulderSide += (shoulderTarget - shoulderSide) * Math.min(1, dt * 8);
 
       if (C.Fi()) {
         if (document.pointerLockElement) document.exitPointerLock();
@@ -1466,19 +1474,19 @@
       let desiredDist = C.zr + (t.car && C.zr < 12 ? 3.8 : 0) + speedKick;
       if (dramaZoomTimer > 0 && C.zr < 12) {
         dramaZoomTimer = Math.max(0, dramaZoomTimer - dt);
-        desiredDist = Math.max(2.3, desiredDist - 0.85 * Math.sin(Math.min(1, dramaZoomTimer) * Math.PI));
+        desiredDist = Math.max(2.2, desiredDist - 0.85 * Math.sin(Math.min(1, dramaZoomTimer) * Math.PI));
       }
 
       const mapBlend = C.bS(1.3, 3, Math.log10(Math.max(1, desiredDist)));
-      const pitch = (t.cp || 0.22) + (1.46 - (t.cp || 0.22)) * mapBlend;
+      const pitch = (t.cp || 0.20) + (1.46 - (t.cp || 0.20)) * mapBlend;
       const yaw = (t.cy || 0) + C.Gu;
       const sinY = Math.sin(yaw), cosY = Math.cos(yaw);
       const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
 
-      // Right-shoulder vector perpendicular to yaw
+      // Right/Left shoulder vector perpendicular to yaw
       const rightX = -cosY, rightZ = sinY;
       const shoulderFactor = (C.tn || t.car || desiredDist > 12 || G.INT.on) ? 0 : (1 - C.bS(6, 12, desiredDist));
-      const shoulderOff = mode.shoulder * shoulderFactor;
+      const shoulderOff = mode.shoulder * shoulderFactor * shoulderSide;
 
       // Precision 0.15m ray-march collision check against buildings
       let targetU = desiredDist;
