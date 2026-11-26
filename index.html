@@ -124,12 +124,12 @@ kbd{font:700 12px/1 var(--body);background:var(--apricot);color:#2a1610;border-r
 #mpStart{background:#4285f4;color:#fff;border:0;font-weight:700}
 #mpGps{background:var(--apricot);color:#2a1610;border:0;font-weight:700}
 #startrow{display:flex;gap:10px;align-items:center;margin:12px 0 0;flex-wrap:wrap}#startAt{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#161b24;color:var(--ink);font:14px var(--body)}
-body.photo #hud,body.photo #side,body.photo #mini,body.photo #cam,body.photo #prompt,body.photo #labels,body.photo #touch,body.photo #dramaBar{display:none!important}
+body.photo #hud,body.photo #side,body.photo #mini,body.photo #cam,body.photo #prompt,body.photo #labels,body.photo #touch,body.photo #dramaBar,body.photo #audioDock{display:none!important}
 #photo{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:6;display:none;gap:6px;padding:8px;border-radius:12px;background:rgba(10,12,16,.7);flex-wrap:wrap;justify-content:center}
 #phSnap{background:#fff;color:#111;border:0;font-weight:700}
 #cutC a.save{display:inline-block;margin-left:8px;padding:5px 10px;border-radius:8px;background:var(--apricot);color:#2a1610;font-weight:700;text-decoration:none}
 #touch{position:fixed;right:12px;bottom:12px;z-index:3;display:none;gap:8px}
-@media (pointer:coarse){#touch{display:flex}#mini{width:120px;height:120px}#prompt{bottom:80px}#cam{bottom:186px!important}#camTog{bottom:142px}}
+@media (pointer:coarse){#touch{display:flex}#mini{width:120px;height:120px}#prompt{bottom:80px}#cam{bottom:186px!important}#camTog{bottom:142px}#audioDock{bottom:64px}}
 @media (max-width:640px){#side{display:none}#street{max-width:70vw}#mside{width:calc(100vw - 28px);bottom:auto;max-height:42vh}}
 
 #camTog{position:fixed;left:12px;bottom:200px;z-index:4;background:var(--panel);backdrop-filter:blur(8px);padding:9px 14px}
@@ -138,6 +138,20 @@ body.photo #hud,body.photo #side,body.photo #mini,body.photo #cam,body.photo #pr
 #cam button{text-align:left}
 body.photo #camTog{display:none!important}
 @media (max-height:560px){#cam.open{flex-direction:row;flex-wrap:wrap;max-width:70vw}}
+#audioDock{position:fixed;right:12px;bottom:12px;z-index:5;width:min(266px,calc(100vw - 24px));padding:8px 11px;font-size:12px}
+#audioHead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#audioTog{background:transparent;border:0;padding:2px 4px;font:600 12.5px/1.2 var(--body);color:var(--ink);display:flex;align-items:center;gap:6px;flex:1;text-align:left}
+#audioTog:hover{background:transparent;color:var(--apricot)}
+#audioMute{padding:5px 8px;font-size:12px;border-radius:7px}
+#audioBody{display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+#audioDock.open #audioBody{display:block}
+#audioNow{font-size:11.5px;color:#ffd28a;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#audioModes{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:9px}
+#audioModes button{padding:6px 7px;font-size:11.5px;border-radius:7px;text-align:center}
+#audioModes button.on{background:var(--apricot);color:#2a1610;border-color:var(--apricot);font-weight:700}
+.volRow{display:grid;grid-template-columns:64px 1fr 32px;align-items:center;gap:6px;margin:5px 0;font-size:11.5px;color:var(--dim)}
+.volRow input[type=range]{width:100%;accent-color:var(--apricot);cursor:pointer;height:4px}
+.volRow b{font-weight:600;color:var(--ink);text-align:right;font-size:11px}
 #film{position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at 50% 46%,rgba(0,0,0,0) 58%,rgba(12,8,6,.28) 100%)}#film:after{content:"";position:absolute;inset:0;opacity:.04;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>")}
 </style>
 </head>
@@ -154,6 +168,24 @@ body.photo #camTog{display:none!important}
   <div class="row"><button id="bHelp">Controls</button><button id="bChar">Character (C)</button><button id="bReset">New day</button></div></aside>
 <canvas id="mini" width="352" height="352" aria-label="Map around you"></canvas>
 <div id="film"></div><button id="camTog" aria-expanded="false" title="Show or hide the controls">Menu ▾</button><div id="cam"><button id="bZout" aria-label="Zoom out" title="Zoom out">−</button><button id="bZin" aria-label="Zoom in" title="Zoom in">+</button><button id="bHome" title="Back down to street level">Street</button><button id="bCamMode" title="Switch 3rd-person camera framing (B)">3rd Cam: OTS (B)</button><button id="bDrama" title="Find or trigger live street drama (K)">Drama Radar (K)</button><button id="bMap" title="Open Google-style map (M)">Map (M)</button><button id="bSound" title="Sound on or off">Sound: on</button><button id="bPhone" title="Your phone: taxi, camera, jobs, friends, drama (P)">Phone (P)</button><button id="bNight" title="Cycle lighting: Golden Sun, Noon, Sunset, Night (N)">Sky: Golden Sun (N)</button><button id="bFront" title="See him from the front (V)">Front view (V)</button></div>
+<div class="panel" id="audioDock" aria-label="Music and volume controls">
+  <div id="audioHead">
+    <button id="audioTog" aria-expanded="false">🎵 Easy Music ▾</button>
+    <button id="audioMute" title="Mute or unmute all audio">🔊</button>
+  </div>
+  <div id="audioBody">
+    <div id="audioNow">Soft Yerevan Rhodes · Easy Listening</div>
+    <div id="audioModes">
+      <button data-mode="easy" class="on">🎹 Easy Chill</button>
+      <button data-mode="armenia">🇦🇲 Armenian</button>
+      <button data-mode="lounge">🍷 Lounge</button>
+      <button data-mode="off">🔇 Music Off</button>
+    </div>
+    <label class="volRow"><span>🎵 Music</span><input id="volMusic" type="range" min="0" max="100" value="55"><b id="volMusicV">55%</b></label>
+    <label class="volRow"><span>🗣 Voices</span><input id="volVoice" type="range" min="0" max="100" value="85"><b id="volVoiceV">85%</b></label>
+    <label class="volRow"><span>🌆 Street</span><input id="volSfx" type="range" min="0" max="100" value="25"><b id="volSfxV">25%</b></label>
+  </div>
+</div>
 <div class="panel" id="prompt"></div>
 <div class="panel" id="toast" role="status"></div>
 <div id="photo"><button id="phFilter">Filter: No filter</button><button id="phPose">Wave</button><button id="phSelfie">Selfie</button><button id="phSnap">Take photo</button><button id="phRec">Record 8 s</button><button id="phExit">Exit (O)</button></div>
@@ -234,7 +266,7 @@ body.photo #camTog{display:none!important}
 <script src="models/props.js"></script>
 <script src="mocap.js"></script>
 <script src="vox.js"></script>
-<script src="game.js?v=1795581300"></script>
-<script src="hyper.js?v=1795581300"></script>
+<script src="game.js?v=1795581500"></script>
+<script src="hyper.js?v=1795581500"></script>
 </body>
 </html>

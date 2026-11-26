@@ -3,7 +3,11 @@
   "use strict";
 
   const STORAGE_KEY = "walk-armenia-hyper-v1";
-  let state = { respect: 10, clout: 120, dramas: 0, thieves: 0, nardiWins: 0, pulpulaks: 0, camMode: 0, mapLayer: "hybrid", roses: 0 };
+  let state = {
+    respect: 10, clout: 120, dramas: 0, thieves: 0, nardiWins: 0, pulpulaks: 0,
+    camMode: 0, mapLayer: "hybrid", roses: 0,
+    musicMode: "easy", volMusic: 55, volVoice: 85, volSfx: 25, muted: false
+  };
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (saved && typeof saved === "object") Object.assign(state, saved);
@@ -23,196 +27,368 @@
     return r;
   }
 
-  // ---- Audio Helper: Authentic Armenian Duduk + Water + Crowd + Drama Stings ----
+  // ---- Studio-Warm Music Player & Volume Mixer (Zero Harsh Static/Buzz!) ----
+  window.__hyperAudioOwned = true;
   const HyperAudio = (() => {
-    let ctx = null, master = null, dudukNode = null, dudukOn = false, nextNoteAt = 0, noteIdx = 0;
-    // Authentic Armenian Hijaz / Duduk modal melody (Dle Yaman / Sari Aghjik inspired intervals)
-    const DUDUK_SEQ = [
-      [293.66, 1.4], [311.13, 0.7], [369.99, 1.1], [392.00, 1.6],
-      [369.99, 0.8], [311.13, 0.9], [293.66, 1.8], [261.63, 1.0],
-      [293.66, 1.2], [392.00, 1.0], [440.00, 1.4], [392.00, 0.9],
-      [369.99, 1.1], [311.13, 0.8], [293.66, 2.2]
+    let ctx = null, musicBus = null, sfxBus = null, reverbSend = null, stepTimer = 0, stepIdx = 0;
+
+    const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+    // Easy Chill: Silky warm Rhodes progressions (Cmaj9 -> Am9 -> Fmaj9 -> G6/9)
+    const EASY_CHORDS = [
+      { bass: 48, notes: [60, 64, 67, 71, 74], mel: [76, -1, 74, -1, 71, -1, 72, -1] },
+      { bass: 45, notes: [57, 60, 64, 67, 71], mel: [72, -1, 71, -1, 69, -1, 67, -1] },
+      { bass: 41, notes: [53, 57, 60, 64, 67], mel: [69, -1, 72, -1, 71, -1, 67, -1] },
+      { bass: 43, notes: [55, 59, 62, 64, 69], mel: [67, -1, 71, -1, 74, -1, 72, -1] }
     ];
+
+    // Authentic Warm Armenian Folk Music (3 soulful motifs in D Hijaz / D Minor Folk)
+    const ARMENIA_THEMES = [
+      {
+        name: "Երևանյան Երեկո · Yerevan Evening",
+        chords: [
+          { bass: 50, arp: [57, 62, 65, 69], mel: [74, -1, 75, 74, 72, -1, 69, -1] },
+          { bass: 51, arp: [58, 63, 67, 70], mel: [70, -1, 72, 74, 75, -1, 74, -1] },
+          { bass: 43, arp: [55, 58, 62, 67], mel: [74, -1, 72, 70, 69, -1, 67, -1] },
+          { bass: 45, arp: [57, 61, 64, 69], mel: [69, -1, 70, 69, 67, 65, 62, -1] }
+        ]
+      },
+      {
+        name: "Սարի Աղջիկ · Sari Aghjik Mood",
+        chords: [
+          { bass: 50, arp: [57, 62, 65, 69], mel: [69, 70, 74, -1, 72, 70, 69, -1] },
+          { bass: 48, arp: [55, 60, 64, 67], mel: [67, 69, 70, -1, 69, 67, 65, -1] },
+          { bass: 46, arp: [53, 58, 62, 65], mel: [65, 67, 69, -1, 67, 65, 64, -1] },
+          { bass: 45, arp: [57, 61, 64, 69], mel: [64, 65, 67, 65, 62, -1, 62, -1] }
+        ]
+      },
+      {
+        name: "Էրեբունի · Erebuni Dawn",
+        chords: [
+          { bass: 50, arp: [57, 62, 66, 69], mel: [69, -1, 74, -1, 76, 74, 73, -1] },
+          { bass: 43, arp: [55, 58, 62, 67], mel: [74, -1, 70, -1, 69, 67, 69, -1] },
+          { bass: 46, arp: [53, 58, 62, 65], mel: [70, -1, 69, 67, 65, -1, 67, -1] },
+          { bass: 45, arp: [57, 61, 64, 69], mel: [69, 70, 69, 67, 62, -1, -1, -1] }
+        ]
+      }
+    ];
+
+    // Saryan Street Wine-Bar Lounge (Smooth Jazz-Bossa Rhodes)
+    const LOUNGE_CHORDS = [
+      { bass: 50, notes: [60, 64, 65, 69], mel: [72, -1, 74, -1, 76, -1, 72, -1] },
+      { bass: 43, notes: [59, 64, 65, 69], mel: [71, -1, 69, -1, 67, -1, 71, -1] },
+      { bass: 48, notes: [59, 62, 64, 67], mel: [72, -1, 74, 71, 67, -1, 64, -1] },
+      { bass: 45, notes: [58, 61, 64, 67], mel: [69, -1, 67, -1, 64, -1, 61, -1] }
+    ];
+
+    function makeWarmReverb(c) {
+      const dur = 1.8, len = Math.floor(c.sampleRate * dur);
+      const buf = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        let prev = 0;
+        for (let i = 0; i < len; i++) {
+          const decay = Math.pow(1 - i / len, 2.8);
+          // Warm low-passed diffuse stereo tail (zero metallic hiss)
+          prev = prev * 0.78 + (Math.random() * 2 - 1) * 0.22;
+          d[i] = prev * decay * 0.55;
+        }
+      }
+      const conv = c.createConvolver();
+      conv.buffer = buf;
+      return conv;
+    }
 
     function ensure() {
       if (ctx) return ctx;
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       ctx = new AC();
-      master = ctx.createGain();
-      master.gain.value = 0.55;
-      master.connect(ctx.destination);
-      return ctx;
-    }
+      musicBus = ctx.createGain();
+      sfxBus = ctx.createGain();
+      const masterLP = ctx.createBiquadFilter();
+      masterLP.type = "lowpass";
+      masterLP.frequency.value = 4200;
 
-    function isSoundOn() {
-      const g = window.__game;
-      return !g || !g.SND || g.SND.on !== false;
+      const rev = makeWarmReverb(ctx);
+      reverbSend = ctx.createGain();
+      reverbSend.gain.value = 0.28;
+
+      musicBus.connect(masterLP);
+      musicBus.connect(reverbSend);
+      reverbSend.connect(rev);
+      rev.connect(masterLP);
+      sfxBus.connect(masterLP);
+      masterLP.connect(ctx.destination);
+      applyVolumes();
+      return ctx;
     }
 
     function resume() {
       const c = ensure();
       if (c && c.state === "suspended") c.resume().catch(() => {});
+      applyVolumes();
     }
 
-    function playDudukNote(freq, dur, vol) {
-      if (!isSoundOn()) return;
-      const c = ensure();
-      if (!c || c.state !== "running") return;
-      const now = c.currentTime;
-      // Warm double-reed woodwind tone (sawtooth + soft triangle through dual formant bandpass filters)
-      const osc1 = c.createOscillator();
-      const osc2 = c.createOscillator();
-      const vib = c.createOscillator();
-      const vibGain = c.createGain();
-      const bp1 = c.createBiquadFilter();
-      const bp2 = c.createBiquadFilter();
-      const lp = c.createBiquadFilter();
-      const env = c.createGain();
+    function applyVolumes() {
+      const muted = !!state.muted;
+      const mVol = muted ? 0 : (state.volMusic / 100) * 0.48;
+      const sVol = muted ? 0 : (state.volSfx / 100) * 0.45;
+      const vVol = muted ? 0 : (state.volVoice / 100);
 
-      osc1.type = "sawtooth";
-      osc2.type = "triangle";
-      osc1.frequency.setValueAtTime(freq * 0.985, now);
-      osc1.frequency.exponentialRampToValueAtTime(freq, now + 0.14);
-      osc2.frequency.setValueAtTime(freq * 0.5, now);
+      if (ctx && musicBus) {
+        const t = ctx.currentTime;
+        musicBus.gain.setTargetAtTime(mVol, t, 0.06);
+        sfxBus.gain.setTargetAtTime(sVol, t, 0.06);
+      }
 
-      vib.type = "sine";
-      vib.frequency.value = 4.8;
-      vibGain.gain.value = freq * 0.011;
-      vib.connect(vibGain);
-      vibGain.connect(osc1.frequency);
-
-      bp1.type = "bandpass";
-      bp1.frequency.value = 620;
-      bp1.Q.value = 1.6;
-      bp2.type = "peaking";
-      bp2.frequency.value = 1150;
-      bp2.gain.value = 4;
-      lp.type = "lowpass";
-      lp.frequency.value = 1650;
-
-      env.gain.setValueAtTime(0.0001, now);
-      env.gain.linearRampToValueAtTime(vol * 0.18, now + 0.18);
-      env.gain.setValueAtTime(vol * 0.15, now + Math.max(0.25, dur - 0.25));
-      env.gain.exponentialRampToValueAtTime(0.0001, now + dur + 0.12);
-
-      osc1.connect(bp1);
-      osc2.connect(bp1);
-      bp1.connect(bp2);
-      bp2.connect(lp);
-      lp.connect(env);
-      env.connect(master);
-
-      osc1.start(now); osc2.start(now); vib.start(now);
-      osc1.stop(now + dur + 0.16); osc2.stop(now + dur + 0.16); vib.stop(now + dur + 0.16);
-    }
-
-    function updateDuduk(dt, proximityVol) {
-      if (!isSoundOn() || proximityVol <= 0.02) { dudukOn = false; return; }
-      const c = ensure();
-      if (!c || c.state !== "running") return;
-      dudukOn = true;
-      nextNoteAt -= dt;
-      if (nextNoteAt <= 0) {
-        const [f, d] = DUDUK_SEQ[noteIdx % DUDUK_SEQ.length];
-        noteIdx++;
-        playDudukNote(f, d * 1.15, Math.min(1, proximityVol));
-        nextNoteAt = d * 1.05;
+      // Sync cleanly with game.js internal audio buses!
+      const g = window.__game;
+      const au = g && g._ext && g._ext.audio;
+      if (au && au.ctx) {
+        const t = au.ctx.currentTime;
+        if (au.sfx) au.sfx.gain.setTargetAtTime(muted ? 0 : (state.volSfx / 100) * 0.75, t, 0.06);
+        if (au.amb) au.amb.gain.setTargetAtTime(muted ? 0 : (state.volSfx / 100) * 0.35, t, 0.06);
+        if (au.vox) au.vox.gain.setTargetAtTime(muted ? 0 : vVol * 1.45, t, 0.06);
+        if (au.oldMus) au.oldMus.gain.setTargetAtTime(0, t, 0.06);
+      }
+      if (g && g.SND && g.SND.on === muted) {
+        g.SND.setOn(!muted);
       }
     }
 
-    function playWaterSplash() {
-      if (!isSoundOn()) return;
-      const c = ensure();
-      if (!c || c.state !== "running") return;
-      const now = c.currentTime;
-      const len = Math.floor(c.sampleRate * 0.65);
-      const buf = c.createBuffer(1, len, c.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.sin((i / len) * Math.PI);
-      const src = c.createBufferSource();
-      src.buffer = buf;
-      const bp = c.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.setValueAtTime(1400, now);
-      bp.frequency.exponentialRampToValueAtTime(2600, now + 0.3);
-      bp.frequency.exponentialRampToValueAtTime(900, now + 0.65);
-      bp.Q.value = 1.8;
-      const g = c.createGain();
-      g.gain.setValueAtTime(0.001, now);
-      g.gain.linearRampToValueAtTime(0.22, now + 0.08);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-      src.connect(bp); bp.connect(g); g.connect(master);
-      src.start(now);
+    // Silky Warm Rhodes Electric Piano (pure sine + delicate bell harmonic)
+    function playRhodes(freq, dur, vol, delay) {
+      if (!ctx || ctx.state !== "running" || state.muted) return;
+      const t = ctx.currentTime + (delay || 0);
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+      const g1 = ctx.createGain(), g2 = ctx.createGain();
+      o1.type = "sine"; o1.frequency.setValueAtTime(freq, t);
+      o2.type = "sine"; o2.frequency.setValueAtTime(freq * 2, t);
+
+      g1.gain.setValueAtTime(0.0001, t);
+      g1.gain.linearRampToValueAtTime(vol, t + 0.025);
+      g1.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol * 0.25), t + dur * 0.65);
+      g1.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.linearRampToValueAtTime(vol * 0.16, t + 0.015);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + Math.min(0.45, dur * 0.35));
+
+      o1.connect(g1); g1.connect(musicBus);
+      o2.connect(g2); g2.connect(musicBus);
+      o1.start(t); o2.start(t);
+      o1.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
     }
 
-    function playDramaSting(intense) {
-      if (!isSoundOn()) return;
+    // Warm Plucked Nylon Guitar / Armenian Oud String
+    function playPluck(freq, dur, vol, delay) {
+      if (!ctx || ctx.state !== "running" || state.muted) return;
+      const t = ctx.currentTime + (delay || 0);
+      const o = ctx.createOscillator();
+      const lp = ctx.createBiquadFilter();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(freq, t);
+      lp.type = "lowpass";
+      lp.frequency.setValueAtTime(1650, t);
+      lp.frequency.exponentialRampToValueAtTime(420, t + Math.min(0.9, dur));
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(lp); lp.connect(g); g.connect(musicBus);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+
+    // Silky Warm Armenian Flute / Mellow Apricot-Wood Duduk (ZERO harsh buzz!)
+    function playDudukNote(freq, dur, vol, delay) {
+      if (!ctx || ctx.state !== "running" || state.muted) return;
+      const t = ctx.currentTime + (delay || 0);
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), vib = ctx.createOscillator();
+      const vg = ctx.createGain(), g2 = ctx.createGain(), lp = ctx.createBiquadFilter(), env = ctx.createGain();
+      o1.type = "sine";
+      o2.type = "triangle";
+      o1.frequency.setValueAtTime(freq * 0.992, t);
+      o1.frequency.exponentialRampToValueAtTime(freq, t + 0.16);
+      o2.frequency.setValueAtTime(freq, t);
+
+      vib.type = "sine"; vib.frequency.value = 4.6;
+      vg.gain.value = freq * 0.0075;
+      vib.connect(vg); vg.connect(o1.frequency);
+
+      g2.gain.value = 0.22;
+      lp.type = "lowpass"; lp.frequency.value = 920;
+
+      const peak = (vol || 0.5) * 0.16;
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.linearRampToValueAtTime(peak, t + 0.2);
+      env.gain.setValueAtTime(peak * 0.85, t + Math.max(0.25, dur - 0.22));
+      env.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.15);
+
+      o1.connect(lp); o2.connect(g2); g2.connect(lp);
+      lp.connect(env); env.connect(musicBus);
+      o1.start(t); o2.start(t); vib.start(t);
+      o1.stop(t + dur + 0.2); o2.stop(t + dur + 0.2); vib.stop(t + dur + 0.2);
+    }
+
+    function getTrackTitle() {
+      if (state.muted) return "Audio Muted";
+      if (state.musicMode === "off") return "Music Off · Quiet Yerevan Streets";
+      if (state.musicMode === "easy") return "Soft Yerevan Rhodes · Easy Listening";
+      if (state.musicMode === "lounge") return "Saryan Wine Bar · Smooth Lounge";
+      const th = ARMENIA_THEMES[Math.floor(stepIdx / 32) % ARMENIA_THEMES.length];
+      return th.name;
+    }
+
+    function updateAudioUI() {
+      const tog = document.getElementById("audioTog");
+      const nowEl = document.getElementById("audioNow");
+      const muteBtn = document.getElementById("audioMute");
+      const labels = { easy: "🎵 Easy Chill", armenia: "🇦🇲 Armenian", lounge: "🍷 Lounge", off: "🎵 Music Off" };
+      const open = document.getElementById("audioDock") && document.getElementById("audioDock").classList.contains("open");
+      if (tog) tog.textContent = (state.muted ? "🔇 Muted" : (labels[state.musicMode] || "🎵 Music")) + (open ? " ▴" : " ▾");
+      if (nowEl) nowEl.textContent = getTrackTitle();
+      if (muteBtn) muteBtn.textContent = state.muted ? "🔇" : "🔊";
+      document.querySelectorAll("#audioModes button").forEach(b => b.classList.toggle("on", b.dataset.mode === state.musicMode));
+      const vm = document.getElementById("volMusic"), vv = document.getElementById("volVoice"), vs = document.getElementById("volSfx");
+      if (vm) { vm.value = state.volMusic; document.getElementById("volMusicV").textContent = state.volMusic + "%"; }
+      if (vv) { vv.value = state.volVoice; document.getElementById("volVoiceV").textContent = state.volVoice + "%"; }
+      if (vs) { vs.value = state.volSfx; document.getElementById("volSfxV").textContent = state.volSfx + "%"; }
+    }
+
+    function setMode(mode) {
+      state.musicMode = mode;
+      if (mode !== "off") state.muted = false;
+      stepIdx = 0; stepTimer = 0.05;
+      saveState();
+      resume();
+      applyVolumes();
+      updateAudioUI();
+    }
+
+    function tick(dt) {
+      if (state.muted || state.musicMode === "off" || state.volMusic <= 0) return;
+      if (!ctx || ctx.state !== "running") return;
+      stepTimer -= dt;
+      if (stepTimer > 0) return;
+
+      const beat = stepIdx % 8;
+      if (state.musicMode === "easy") {
+        const bar = Math.floor(stepIdx / 8) % EASY_CHORDS.length;
+        const ch = EASY_CHORDS[bar];
+        if (beat === 0) {
+          playRhodes(midiToHz(ch.bass), 3.6, 0.17, 0);
+          ch.notes.forEach((n, i) => playRhodes(midiToHz(n), 3.2, 0.065, i * 0.035));
+        } else if (beat === 4) {
+          playRhodes(midiToHz(ch.bass + 12), 1.8, 0.075, 0);
+        }
+        const m = ch.mel[beat];
+        if (m > 0 && Math.random() < 0.78) playRhodes(midiToHz(m), 1.4, 0.075, 0.02);
+        stepTimer = 0.44;
+      } else if (state.musicMode === "armenia") {
+        const thIdx = Math.floor(stepIdx / 32) % ARMENIA_THEMES.length;
+        const th = ARMENIA_THEMES[thIdx];
+        const bar = Math.floor(stepIdx / 8) % th.chords.length;
+        const ch = th.chords[bar];
+        if (beat === 0) {
+          playPluck(midiToHz(ch.bass), 2.6, 0.18, 0);
+          if (stepIdx % 32 === 0) updateAudioUI();
+        }
+        // Gentle acoustic Armenian oud/guitar arpeggio
+        const arpNote = ch.arp[beat % ch.arp.length];
+        playPluck(midiToHz(arpNote), 1.15, beat % 2 === 0 ? 0.095 : 0.06, 0);
+        // Soulful warm Armenian flute/duduk melody
+        const mel = ch.mel[beat];
+        if (mel > 0) playDudukNote(midiToHz(mel), 0.95, 0.72, 0.04);
+        stepTimer = 0.42;
+      } else if (state.musicMode === "lounge") {
+        const bar = Math.floor(stepIdx / 8) % LOUNGE_CHORDS.length;
+        const ch = LOUNGE_CHORDS[bar];
+        if (beat === 0 || beat === 3) {
+          ch.notes.forEach((n, i) => playRhodes(midiToHz(n), 1.9, 0.06, i * 0.02));
+        }
+        if (beat === 0 || beat === 5) playPluck(midiToHz(ch.bass), 1.6, 0.16, 0);
+        const m = ch.mel[beat];
+        if (m > 0) playRhodes(midiToHz(m), 1.1, 0.07, 0.01);
+        stepTimer = 0.38;
+      }
+      stepIdx++;
+    }
+
+    // Clean, Gentle Acoustic SFX (ZERO harsh noise / buzz!)
+    function playChime(freqs, dur, vol) {
+      if (state.muted || state.volSfx <= 0) return;
       const c = ensure();
       if (!c || c.state !== "running") return;
-      const now = c.currentTime;
-      const freqs = intense ? [196, 207.65, 293.66] : [220, 277.18, 329.63];
-      freqs.forEach((f, idx) => {
-        const o = c.createOscillator();
-        const g = c.createGain();
-        o.type = intense ? "sawtooth" : "triangle";
-        o.frequency.setValueAtTime(f, now + idx * 0.055);
-        const lp = c.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = intense ? 900 : 1200;
-        g.gain.setValueAtTime(0.0001, now + idx * 0.055);
-        g.gain.linearRampToValueAtTime(0.11, now + idx * 0.055 + 0.03);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.055 + 0.55);
-        o.connect(lp); lp.connect(g); g.connect(master);
-        o.start(now + idx * 0.055); o.stop(now + idx * 0.055 + 0.6);
+      const t = c.currentTime;
+      freqs.forEach((f, i) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = "sine"; o.frequency.setValueAtTime(f, t + i * 0.07);
+        g.gain.setValueAtTime(0.0001, t + i * 0.07);
+        g.gain.linearRampToValueAtTime(vol, t + i * 0.07 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.07 + dur);
+        o.connect(g); g.connect(sfxBus);
+        o.start(t + i * 0.07); o.stop(t + i * 0.07 + dur + 0.04);
       });
     }
 
-    function playCrowdGasp(cheer) {
-      if (!isSoundOn()) return;
-      const c = ensure();
-      if (!c || c.state !== "running") return;
-      const now = c.currentTime;
-      const dur = cheer ? 0.9 : 0.55;
-      const len = Math.floor(c.sampleRate * dur);
-      const buf = c.createBuffer(1, len, c.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) {
-        const t = i / len;
-        d[i] = (Math.random() * 2 - 1) * Math.sin(t * Math.PI) * (cheer ? 1 : 0.8);
+    function playWaterSplash() { playChime([523.25, 659.25, 783.99], 0.45, 0.12); }
+    function playDramaSting(intense) { playChime(intense ? [293.66, 349.23, 440] : [329.63, 392, 493.88], 0.5, 0.11); }
+    function playCrowdGasp(cheer) { playChime(cheer ? [440, 554.37, 659.25] : [392, 349.23], 0.4, 0.10); }
+    function playDiceRoll() { playChime([620, 740, 580, 820], 0.09, 0.08); }
+    function updateDuduk() {} // Replaced by clean continuous Armenian Music option so no random clashing synths!
+
+    function bindDockUI() {
+      const dock = document.getElementById("audioDock");
+      const tog = document.getElementById("audioTog");
+      const muteBtn = document.getElementById("audioMute");
+      if (tog && dock) {
+        tog.addEventListener("click", () => {
+          const open = dock.classList.toggle("open");
+          tog.setAttribute("aria-expanded", open);
+          updateAudioUI();
+        });
       }
-      const src = c.createBufferSource();
-      src.buffer = buf;
-      const f = c.createBiquadFilter();
-      f.type = "bandpass";
-      f.frequency.setValueAtTime(cheer ? 950 : 620, now);
-      f.frequency.exponentialRampToValueAtTime(cheer ? 1500 : 420, now + dur);
-      f.Q.value = 2.4;
-      const g = c.createGain();
-      g.gain.value = 0.24;
-      src.connect(f); f.connect(g); g.connect(master);
-      src.start(now);
+      if (muteBtn) {
+        muteBtn.addEventListener("click", () => {
+          state.muted = !state.muted;
+          saveState(); resume(); applyVolumes(); updateAudioUI();
+        });
+      }
+      document.querySelectorAll("#audioModes button").forEach(btn => {
+        btn.addEventListener("click", () => setMode(btn.dataset.mode));
+      });
+      const bindSlider = (id, key) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("input", () => {
+          state[key] = Number(el.value);
+          if (state[key] > 0 && state.muted) state.muted = false;
+          saveState(); resume(); applyVolumes(); updateAudioUI();
+        });
+      };
+      bindSlider("volMusic", "volMusic");
+      bindSlider("volVoice", "volVoice");
+      bindSlider("volSfx", "volSfx");
+
+      // Sync existing Menu Sound button with our mute state
+      const bSound = document.getElementById("bSound");
+      if (bSound) {
+        bSound.addEventListener("click", () => {
+          setTimeout(() => {
+            const g = window.__game;
+            state.muted = !(g && g.SND && g.SND.on);
+            saveState(); applyVolumes(); updateAudioUI();
+          }, 20);
+        });
+      }
+      updateAudioUI();
     }
 
-    function playDiceRoll() {
-      if (!isSoundOn()) return;
-      const c = ensure();
-      if (!c || c.state !== "running") return;
-      const now = c.currentTime;
-      for (let i = 0; i < 6; i++) {
-        const t = now + i * 0.065 + Math.random() * 0.02;
-        const o = c.createOscillator();
-        const g = c.createGain();
-        o.type = "square";
-        o.frequency.value = 500 + Math.random() * 650;
-        g.gain.setValueAtTime(0.08, t);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
-        o.connect(g); g.connect(master);
-        o.start(t); o.stop(t + 0.04);
-      }
-    }
-
-    return { resume, updateDuduk, playWaterSplash, playDramaSting, playCrowdGasp, playDiceRoll, playDudukNote };
+    return {
+      resume, tick, updateDuduk, setMode, applyVolumes, bindDockUI, updateAudioUI,
+      playWaterSplash, playDramaSting, playCrowdGasp, playDiceRoll, playDudukNote
+    };
   })();
 
   window.addEventListener("pointerdown", () => HyperAudio.resume(), { passive: true });
@@ -222,6 +398,8 @@
   function boot() {
     const G = window.__game;
     if (!G || !G._ext) { setTimeout(boot, 60); return; }
+    HyperAudio.bindDockUI();
+    setTimeout(() => HyperAudio.applyVolumes(), 300);
     const E = G._ext;
     const T = E.THREE;
     const { scene, renderer, sun, hemi, sky, sunDir, ararat, araratDir, nightObj } = E;
@@ -2780,7 +2958,7 @@
     // =========================================================================
     // 7. MAIN FRAME TICK: ANIMATE FLAGS, WATER, STEAM, DUST, DUDUK & DRAMA!
     // =========================================================================
-    let simTime = 0;
+    let simTime = 0, audioSynced = false;
     window.__hyperTick = function (dt, paused) {
       if (!window.__ready) return;
       if (!propsBuilt) buildAllCultureProps();
@@ -2875,16 +3053,12 @@
         dustSystem.pts.visible = false;
       }
 
-      // Proximity Armenian Duduk Live Music
-      if (!paused && !G.INT.on && musicSpots.length) {
-        let minD = 1e9;
-        for (const ms of musicSpots) {
-          const d = Math.hypot(ms.x - P.x, ms.z - P.z);
-          if (d < minD) minD = d;
-        }
-        const prox = minD < 34 ? Math.max(0, 1 - minD / 34) : 0;
-        HyperAudio.updateDuduk(dt, prox);
+      // Clean Easy Chill / Armenian Music / Lounge Player & Volume Sync
+      if (!audioSynced && E.audio && E.audio.ctx) {
+        audioSynced = true;
+        HyperAudio.applyVolumes();
       }
+      HyperAudio.tick(dt);
 
       // Update Living Drama Director
       if (!paused) {
@@ -2899,6 +3073,7 @@
       spawnDrama,
       triggerDramaRadar,
       setMapLayer: (l) => { mapLayer = l; M.Rn(); },
+      setMusicMode: (m) => HyperAudio.setMode(m),
       cultureSpots,
       getActiveDrama: () => activeDrama,
       applySkyPolish
