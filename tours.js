@@ -239,10 +239,16 @@
             <div class="desc">${t.desc}</div>
             <div class="tActs">
               <button class="go">${done ? "▶ Replay Tour" : "🚌 Book · " + UI.Ie(t.price)}</button>
+              ${window.__dest && window.__dest.hasHub(t.id) ? '<button class="w3d" title="Step off the bus and walk here in 3D!">🚶 3D</button>' : ""}
               <button class="gm" title="Inspect real Google Maps Satellite">🌍 Maps</button>
             </div>
           </div>`;
         card.querySelector(".go").addEventListener("click", () => bookSingleTour(t));
+        const w3dBtn = card.querySelector(".w3d");
+        if (w3dBtn) w3dBtn.addEventListener("click", () => {
+          markVisited(t);
+          window.__dest.enterHub(t.id);
+        });
         card.querySelector(".gm").addEventListener("click", () => {
           startTourSession([t], false, true);
         });
@@ -412,6 +418,9 @@
         if (it.drop3D) {
           dropBtn.style.display = "";
           dropBtn.textContent = "🚶 Walk at " + it.drop3D.label + " in 3D";
+        } else if (window.__dest && window.__dest.hasHub(it.id)) {
+          dropBtn.style.display = "";
+          dropBtn.textContent = "🚶 Step Off Bus · Walk in 3D";
         } else {
           dropBtn.style.display = "none";
         }
@@ -510,9 +519,13 @@
       if (prevMusic && prevMusic !== H.state.musicMode && !H.state.muted) {
         H.setMusicMode(prevMusic);
       }
-      if (dropTo3D && it && it.drop3D) {
-        G.goTo(it.drop3D.x, it.drop3D.z);
-        UI.de("Arrived at " + it.drop3D.label, it.hy, "Your tour coach dropped you right here in 3D Yerevan!");
+      if (dropTo3D && it) {
+        if (it.drop3D) {
+          G.goTo(it.drop3D.x, it.drop3D.z);
+          UI.de("Arrived at " + it.drop3D.label, it.hy, "Your tour coach dropped you right here in 3D Yerevan!");
+        } else if (window.__dest && window.__dest.hasHub(it.id)) {
+          window.__dest.enterHub(it.id);
+        }
       }
     }
 

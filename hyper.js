@@ -1528,8 +1528,14 @@
         destZ = C.tt(destZ, G.INT.oz - R.hz + 0.38, G.INT.oz + R.hz - 0.38);
         destY = Math.min(destY, R.H - 0.35);
       }
+      const ven = window.__worldFX && window.__worldFX.getActiveVenue && window.__worldFX.getActiveVenue();
+      if (ven) {
+        destX = C.tt(destX, ven.roomX - 6.3, ven.roomX + 6.3);
+        destZ = C.tt(destZ, ven.roomZ - 6.3, ven.roomZ + 6.3);
+        destY = Math.min(destY, 4.05);
+      }
 
-      const posLerp = Math.min(1, dt * 14);
+      const posLerp = Math.hypot(destX - C.en.x, destZ - C.en.z) > 35 ? 1 : Math.min(1, dt * 14);
       C.en.x += (destX - C.en.x) * posLerp;
       C.en.y += (destY - C.en.y) * posLerp;
       C.en.z += (destZ - C.en.z) * posLerp;

@@ -48,7 +48,7 @@
     }
   `;
 
-  // Pass 4: Cinema Master Composite — FidelityFX CAS Sharpening + Optical Bloom + ACES Filmic + Split-Tone Grade + 35mm Lens Polish
+  // Pass 4: Cinema Master Composite — FidelityFX CAS Sharpening + Optical Bloom + 35mm Bokeh DoF + Lens Rain + ACES Filmic
   const COMPOSITE_FRAG = `
     uniform sampler2D tDiffuse;
     uniform sampler2D tBloom;
@@ -60,6 +60,8 @@
     uniform float uWarmth;
     uniform float uVignette;
     uniform float uGrain;
+    uniform float uDof;
+    uniform float uRainLens;
     varying vec2 vUv;
 
     // ACES Filmic Tone Mapping with silky highlight roll-off
@@ -78,34 +80,74 @@
       return fract((p3.x + p3.y) * p3.z);
     }
 
+    // Subtle 35mm camera-lens raindrop refraction beads
+    vec2 rainDropOffset(vec2 uv, float t) {
+      vec2 grid = uv * vec2(11.0, 6.2);
+      float colId = floor(grid.x);
+      float dropY = grid.y + t * (0.45 + 0.35 * hash12(vec2(colId, 3.7)));
+      vec2 cell = vec2(colId, floor(dropY));
+      vec2 f = vec2(fract(grid.x), fract(dropY)) - 0.5;
+      float seed = hash12(cell);
+      if (seed < 0.62) return vec2(0.0);
+      vec2 ctr = vec2((seed - 0.8) * 0.65, 0.0);
+      vec2 d = f - ctr;
+      d.y *= 1.45;
+      float r = length(d);
+      float m = smoothstep(0.19, 0.03, r);
+      return -d * m * 0.022;
+    }
+
     void main() {
-      vec2 dc = vUv - 0.5;
+      vec2 uv = vUv;
+      if (uRainLens > 0.01) {
+        uv = clamp(uv + rainDropOffset(vUv, uTime) * uRainLens, vec2(0.001), vec2(0.999));
+      }
+
+      vec2 dc = uv - 0.5;
       float r2 = dot(dc, dc);
 
       // Subtle 35mm radial corner chromatic dispersion (zero blur at center!)
       vec2 caOff = dc * r2 * 0.0022;
       vec3 c;
-      c.r = texture2D(tDiffuse, vUv + caOff).r;
-      c.g = texture2D(tDiffuse, vUv).g;
-      c.b = texture2D(tDiffuse, vUv - caOff).b;
+      c.r = texture2D(tDiffuse, uv + caOff).r;
+      c.g = texture2D(tDiffuse, uv).g;
+      c.b = texture2D(tDiffuse, uv - caOff).b;
+
+      // GPU 35mm Cinematic Depth-of-Field Bokeh (focuses on center subject during conversations, drama & photo mode)
+      if (uDof > 0.01) {
+        float coc = smoothstep(0.14, 0.52, length(dc * vec2(1.0, 1.25))) * uDof;
+        if (coc > 0.01) {
+          vec2 rad = uTexel * (coc * 6.5);
+          vec3 acc = c * 0.2;
+          acc += texture2D(tDiffuse, clamp(uv + vec2( 1.0,  0.0) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2(-1.0,  0.0) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2( 0.0,  1.0) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2( 0.0, -1.0) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2( 0.707,  0.707) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2(-0.707,  0.707) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2( 0.707, -0.707) * rad, 0.001, 0.999)).rgb * 0.1;
+          acc += texture2D(tDiffuse, clamp(uv + vec2(-0.707, -0.707) * rad, 0.001, 0.999)).rgb * 0.1;
+          c = mix(c, acc, clamp(coc * 1.15, 0.0, 1.0));
+        }
+      }
 
       // FidelityFX Contrast-Adaptive Sharpening (5-tap micro-detail pop)
       if (uSharp > 0.001) {
-        vec3 n = texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb;
-        vec3 s = texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb;
-        vec3 e = texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb;
-        vec3 w = texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb;
+        vec3 n = texture2D(tDiffuse, uv + vec2(0.0, uTexel.y)).rgb;
+        vec3 s = texture2D(tDiffuse, uv - vec2(0.0, uTexel.y)).rgb;
+        vec3 e = texture2D(tDiffuse, uv + vec2(uTexel.x, 0.0)).rgb;
+        vec3 w = texture2D(tDiffuse, uv - vec2(uTexel.x, 0.0)).rgb;
         vec3 mn = min(c, min(min(n, s), min(e, w)));
         vec3 mx = max(c, max(max(n, s), max(e, w)));
         vec3 amp = clamp(min(mn, 2.0 - mx) / max(mx, vec3(0.0001)), 0.0, 1.0);
         amp = sqrt(amp);
-        float k = -0.145 * uSharp;
+        float k = -0.145 * uSharp * (1.0 - uDof * 0.65);
         vec3 wt = amp * k;
         c = max((c + (n + s + e + w) * wt) / (1.0 + 4.0 * wt), vec3(0.0));
       }
 
       // Add silky optical HDR bloom
-      vec3 bloom = texture2D(tBloom, vUv).rgb;
+      vec3 bloom = texture2D(tBloom, uv).rgb;
       c += bloom * uBloomStrength;
 
       // Exposure & ACES Filmic Tone Map
@@ -179,10 +221,19 @@
         uTime: { value: 0 },
         uWarmth: { value: 0.55 },
         uVignette: { value: 0.24 },
-        uGrain: { value: 0.016 }
+        uGrain: { value: 0.016 },
+        uDof: { value: 0.0 },
+        uRainLens: { value: 0.0 }
       },
       vertexShader: FS_VERT, fragmentShader: COMPOSITE_FRAG, depthTest: false, depthWrite: false
     });
+
+    const roadUniforms = {
+      uWetness: { value: 0.0 },
+      uRainActive: { value: 0.0 },
+      uRainTime: { value: 0.0 }
+    };
+    const fxState = { wetness: 0, rainActive: 0, rainLens: 0, dofOverride: 0, dofCur: 0 };
 
     const fsQuad = new T.Mesh(fsGeo, compMat);
     fsQuad.frustumCulled = false;
@@ -220,7 +271,7 @@
     }
 
     // =========================================================================
-    // 2. WORLD-SPACE PBR SHADER INJECTIONS (GROUND-CONTACT AO + PAVEMENT SHEEN!)
+    // 2. WORLD-SPACE PBR SHADER INJECTIONS (GROUND-CONTACT AO + WET PUDDLES & RIPPLES!)
     // =========================================================================
     let shadersPatched = false;
     function injectWorldPBRShaders() {
@@ -244,11 +295,15 @@
       };
       gf.needsUpdate = true;
 
-      // B. Procedural World-Space Travertine / Asphalt Micro-Roughness & Specular Sheen Variation!
+      // B. Procedural World-Space Travertine / Asphalt Micro-Roughness, Mirror Wet Puddles & Animated Rain Ripples!
       for (const roadMat of G.REAL.roads) {
         if (!roadMat || roadMat._hyperSheen) continue;
         roadMat._hyperSheen = true;
+        roadMat.envMapIntensity = Math.max(roadMat.envMapIntensity || 1.0, 1.9);
         roadMat.onBeforeCompile = (sh) => {
+          sh.uniforms.uWetness = roadUniforms.uWetness;
+          sh.uniforms.uRainActive = roadUniforms.uRainActive;
+          sh.uniforms.uRainTime = roadUniforms.uRainTime;
           sh.vertexShader = sh.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vRoadWP;")
             .replace("#include <begin_vertex>", "#include <begin_vertex>\nvRoadWP = (modelMatrix * vec4(transformed, 1.0)).xyz;");
@@ -256,10 +311,31 @@
             .replace("#include <common>", `
               #include <common>
               varying vec3 vRoadWP;
+              uniform float uWetness;
+              uniform float uRainActive;
+              uniform float uRainTime;
               float rHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
               float rNoise(vec2 p){
                 vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
                 return mix(mix(rHash(i),rHash(i+vec2(1,0)),f.x),mix(rHash(i+vec2(0,1)),rHash(i+vec2(1,1)),f.x),f.y);
+              }
+            `)
+            .replace("#include <color_fragment>", `
+              #include <color_fragment>
+              if (uWetness > 0.01) {
+                float pN = rNoise(vRoadWP.xz * 0.09) * 0.65 + rNoise(vRoadWP.xz * 0.28 + 3.1) * 0.35;
+                float puddle = smoothstep(0.46, 0.72, pN) * uWetness;
+                // Wet travertine / asphalt darkens naturally with water absorption
+                diffuseColor.rgb *= mix(1.0, 0.56, clamp(uWetness * 0.55 + puddle * 0.45, 0.0, 0.85));
+                // Subtle shimmering raindrop rings inside puddles
+                if (uRainActive > 0.05 && puddle > 0.15) {
+                  vec2 rc = vRoadWP.xz * 1.45;
+                  vec2 ri = floor(rc);
+                  vec2 rf = fract(rc) - 0.5;
+                  float ph = fract(uRainTime * 1.35 + rHash(ri));
+                  float ring = smoothstep(0.05, 0.0, abs(length(rf) - ph * 0.46)) * (1.0 - ph);
+                  diffuseColor.rgb += vec3(0.11, 0.13, 0.16) * ring * puddle * uRainActive;
+                }
               }
             `)
             .replace("#include <roughnessmap_fragment>", `
@@ -267,8 +343,13 @@
               float n1 = rNoise(vRoadWP.xz * 0.14);
               float n2 = rNoise(vRoadWP.xz * 0.65 + 4.1);
               float wear = n1 * 0.65 + n2 * 0.35;
-              // Natural patchy specular polish & faint damp stone sheen
               roughnessFactor = clamp(roughnessFactor * mix(0.42, 1.12, wear), 0.16, 0.95);
+              if (uWetness > 0.01) {
+                float pN2 = rNoise(vRoadWP.xz * 0.09) * 0.65 + rNoise(vRoadWP.xz * 0.28 + 3.1) * 0.35;
+                float puddle2 = smoothstep(0.42, 0.68, pN2) * uWetness;
+                float damp = uWetness * 0.48;
+                roughnessFactor = mix(roughnessFactor, 0.035, clamp(damp + puddle2 * 0.78, 0.0, 0.97));
+              }
             `);
         };
         roadMat.needsUpdate = true;
@@ -436,6 +517,24 @@
         if (nightObj.glow.visible) nightObj.glow.material.opacity = Math.min(nightObj.glow.material.opacity, 0.22);
       }
 
+      // Update live wet-pavement & rain uniforms every frame
+      roadUniforms.uWetness.value = fxState.wetness;
+      roadUniforms.uRainActive.value = fxState.rainActive;
+      roadUniforms.uRainTime.value = renderClock;
+
+      // Smoothly ramp 35mm cinematic bokeh DoF during conversations, drama dialogs & Photo Mode
+      const talkEl = UI.fe("talk");
+      const inTalk = !!(talkEl && talkEl.classList.contains("on"));
+      const inPhoto = !!(G.PHOTO && G.PHOTO.on);
+      const dofTarget = Math.max(fxState.dofOverride, inTalk ? 0.92 : inPhoto ? 0.58 : 0.0);
+      fxState.dofCur += (dofTarget - fxState.dofCur) * 0.14;
+
+      // Call auxiliary world systems (weather, 3rd-person lean, destinations, story, spatial audio)
+      if (window.__worldFXTick) window.__worldFXTick(renderClock);
+      if (window.__destTick) window.__destTick(renderClock);
+      if (window.__storyTick) window.__storyTick(renderClock);
+      if (window.__spatialAudioTick) window.__spatialAudioTick(renderClock);
+
       // Bypass post-processing if Native mode or failed
       const cv = UI.fe("c");
       if (gfxMode === "native" || postFailed) {
@@ -457,10 +556,12 @@
         const isDusk = mode === "dusk", isNight = mode === "night";
         brightMat.uniforms.uThresh.value = isNight ? 0.56 : isDusk ? 0.78 : 0.94;
         compMat.uniforms.uExposure.value = isNight ? 1.38 : isDusk ? 1.16 : mode === "day" ? 1.06 : 1.12;
-        compMat.uniforms.uBloomStrength.value = isNight ? 0.48 : isDusk ? 0.34 : 0.22;
+        compMat.uniforms.uBloomStrength.value = (isNight ? 0.48 : isDusk ? 0.34 : 0.22) + fxState.wetness * 0.08;
         compMat.uniforms.uWarmth.value = isDusk ? 0.95 : isNight ? 0.15 : mode === "golden" ? 0.62 : 0.25;
         compMat.uniforms.uSharp.value = gfxMode === "ultra" ? 0.92 : 0.45;
         compMat.uniforms.uGrain.value = gfxMode === "ultra" ? 0.018 : 0.0;
+        compMat.uniforms.uDof.value = gfxMode === "ultra" ? fxState.dofCur : fxState.dofCur * 0.65;
+        compMat.uniforms.uRainLens.value = gfxMode === "ultra" ? fxState.rainLens : 0.0;
         compMat.uniforms.uTime.value = renderClock;
 
         // PASS 1: Render linear HDR scene into rtScene (temporarily disable built-in tonemapping so HDR > 1.0 survives!)
@@ -489,7 +590,7 @@
         renderer.setRenderTarget(rtBloomA);
         renderer.render(fsScene, fsCam);
 
-        // PASS 4: Cinema Master Composite to Screen (CAS Sharpening + Optical Bloom + ACES Filmic + Split-Tone + 35mm Optics)
+        // PASS 4: Cinema Master Composite to Screen (CAS Sharpening + Optical Bloom + 35mm Bokeh + Lens Rain + ACES)
         fsQuad.material = compMat;
         compMat.uniforms.tDiffuse.value = rtScene.texture;
         compMat.uniforms.tBloom.value = rtBloomA.texture;
@@ -508,7 +609,14 @@
     window.__render = {
       getMode: () => gfxMode,
       setMode: (m) => { gfxMode = m; curW = 0; updateGfxBtn(); },
-      isPostActive: () => gfxMode !== "native" && !postFailed
+      isPostActive: () => gfxMode !== "native" && !postFailed,
+      setWeatherFX: (opts = {}) => {
+        if (typeof opts.wetness === "number") fxState.wetness = opts.wetness;
+        if (typeof opts.rainActive === "number") fxState.rainActive = opts.rainActive;
+        if (typeof opts.rainLens === "number") fxState.rainLens = opts.rainLens;
+      },
+      setDofOverride: (v) => { fxState.dofOverride = Math.max(0, Math.min(1, v || 0)); },
+      getFXState: () => ({ ...fxState })
     };
   }
 
